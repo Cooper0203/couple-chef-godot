@@ -624,6 +624,9 @@ func toggle_pause() -> void:
     refresh_ui()
 
 func _on_cooking_tick() -> void:
+    if game_paused:
+        return
+
     if not cooking_active:
         cooking_timer.stop()
         return
