@@ -62,7 +62,7 @@ var cooking_timer: Timer
 var cooking_seconds := 0.0
 var cooking_active := false
 var customer_patience := CUSTOMER_PATIENCE
-
+var round_customer_patience := CUSTOMER_PATIENCE
 var cooking_bar: ProgressBar
 var patience_bar: ProgressBar
 var cooking_status_label: Label
@@ -380,7 +380,12 @@ func start_game(mode: String) -> void:
 
     cooking_seconds = 0.0
     cooking_active = false
-    customer_patience = CUSTOMER_PATIENCE
+        round_customer_patience = CUSTOMER_PATIENCE
+
+    if game_mode == "Career":
+        round_customer_patience = maxf(15.0, CUSTOMER_PATIENCE - float(level - 1) * 0.5)
+
+    customer_patience = round_customer_patience
 
     game_timer.stop()
     cooking_timer.stop()
@@ -442,8 +447,8 @@ func build_kitchen_ui() -> void:
     layout.add_child(patience_title)
 
     patience_bar = ProgressBar.new()
-    patience_bar.max_value = CUSTOMER_PATIENCE
-    patience_bar.value = CUSTOMER_PATIENCE
+    patience_bar.max_value = round_customer_patience
+    patience_bar.value = round_customer_patience
     patience_bar.custom_minimum_size = Vector2(0, 18)
     layout.add_child(patience_bar)
 
@@ -546,7 +551,7 @@ func serve_meal() -> void:
     coins += 10
     round_coins += 10
     customers_served += 1
-    customer_patience = CUSTOMER_PATIENCE
+    customer_patience = round_customer_patience
 
     patience_bar.value = customer_patience
 
@@ -614,7 +619,7 @@ func _on_timer() -> void:
 
     if customer_patience <= 0:
         customers_lost += 1
-        customer_patience = CUSTOMER_PATIENCE
+        customer_patience = round_customer_patience
         status_text = "Customer left! A new customer has arrived."
 
     refresh_ui()
