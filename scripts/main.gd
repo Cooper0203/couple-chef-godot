@@ -639,7 +639,7 @@ func show_results() -> void:
     add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
     add_result_line(layout, "BEST SCORE", str(best_score))
 
-            var message := "Great work, Chef!"
+    var message := "Great work, Chef!"
 
     if game_mode == "Career" and customers_served >= 5:
         message = "Amazing! Level " + str(level + 1) + " unlocked!"
