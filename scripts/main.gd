@@ -36,6 +36,9 @@ var round_coins := 0
 var best_score := 0
 var ingredients := 0
 var cooked_meals := 0
+
+var current_order_name := "Classic Burger"
+var current_ingredients_required := 3
 var customers_served := 0
 var customers_lost := 0
 var time_left := ROUND_TIME
@@ -371,6 +374,19 @@ func toggle_language() -> void:
         selected_language = "English"
 
     show_settings()
+func generate_customer_order() -> void:
+    var order_number := randi_range(0, 2)
+
+    match order_number:
+        0:
+            current_order_name = "Classic Burger"
+            current_ingredients_required = 3
+        1:
+            current_order_name = "Cheese Burger"
+            current_ingredients_required = 4
+        2:
+            current_order_name = "Double Burger"
+            current_ingredients_required = 5
 
 
 func start_game(mode: String) -> void:
@@ -381,6 +397,7 @@ func start_game(mode: String) -> void:
     cooked_meals = 0
     customers_served = 0
     customers_lost = 0
+    generate_customer_order()
     time_left = ROUND_TIME
 
     cooking_seconds = 0.0
@@ -441,7 +458,7 @@ func build_kitchen_ui() -> void:
     pause_button.custom_minimum_size = Vector2(95, 45)
     top.add_child(pause_button)
 
-    order_label = make_label("CUSTOMER ORDER:  3 INGREDIENTS  >  COOK  >  SERVE", 19, Color("#25384c"))
+    order_label = make_label("ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE", 19, Color("#25384c"))
     order_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(order_label)
 
@@ -515,7 +532,7 @@ func prepare_ingredients() -> void:
     if not game_running or game_paused:
         return
 
-    if ingredients >= INGREDIENTS_REQUIRED:
+    if ingredients >= current_ingredients_required:
         status_text = "You have enough ingredients. Start cooking!"
         refresh_ui()
         return
@@ -534,7 +551,7 @@ func cook_meal() -> void:
         refresh_ui()
         return
 
-    if ingredients < INGREDIENTS_REQUIRED:
+    if ingredients < current_ingredients_required:
         status_text = "You need 3 ingredients before cooking!"
         refresh_ui()
         return
@@ -563,7 +580,11 @@ func serve_meal() -> void:
     coins += 10
     round_coins += 10
     customers_served += 1
+    generate_customer_order()
     customer_patience = round_customer_patience
+
+    if order_label:
+        order_label.text = "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE"
 
     patience_bar.value = customer_patience
 
@@ -584,7 +605,7 @@ func refresh_ui() -> void:
         timer_label.text = "TIME: " + str(time_left)
 
     if ingredient_label:
-        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / 3"
+        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / " + str(current_ingredients_required)
 
     if meal_label:
         meal_label.text = "READY MEALS: " + str(cooked_meals)
@@ -640,7 +661,7 @@ func _on_cooking_tick() -> void:
     if cooking_seconds >= COOKING_TIME:
         cooking_timer.stop()
         cooking_active = false
-        ingredients -= INGREDIENTS_REQUIRED
+        ingredients -= current_ingredients_required
         cooked_meals += 1
 
         cooking_bar.value = COOKING_TIME
