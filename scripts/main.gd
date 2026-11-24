@@ -95,7 +95,7 @@ func draw_kitchen(size: Vector2) -> void:
     # Three station illustrations
     var station_x := [0.25, 0.50, 0.75]
     for i in range(3):
-        var x := size.x * station_x[i]
+        var x: float = size.x * float(station_x[i])
         draw_rect(Rect2(x - 65, size.y * 0.40, 130, 105), Color("#f6e6c9"))
         draw_rect(Rect2(x - 55, size.y * 0.43, 110, 65), Color("#4b6272"))
         draw_circle(Vector2(x, size.y * 0.47), 27, Color("#d7e3e5"))
