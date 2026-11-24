@@ -63,6 +63,7 @@ var ip_input: LineEdit
 
 var game_timer: Timer
 var cooking_timer: Timer
+var status_text := "Welcome to Couple Chef!"
 var status_label: Label
 var score_label: Label
 var coins_label: Label
@@ -173,6 +174,8 @@ func make_layout(title_text: String, title_size: int = 32) -> VBoxContainer:
     var margin := make_margin()
     add_child(margin)
     var layout := VBoxContainer.new()
+    layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
     layout.alignment = BoxContainer.ALIGNMENT_CENTER
     layout.add_theme_constant_override("separation", 10)
     margin.add_child(layout)
