@@ -181,6 +181,7 @@ func make_layout(title_text: String, title_size: int = 32) -> VBoxContainer:
     return layout
 
 func show_menu() -> void:
+    disconnect_network()
     game_timer.stop()
     cooking_timer.stop()
     game_running = false
@@ -241,17 +242,25 @@ func start_career_level(selected_level: int) -> void:
 func show_settings() -> void:
     screen = "settings"
     var layout := make_layout("SETTINGS")
-    add_button(layout, "CHEF 1 OUTFIT: " + OUTFIT_NAMES[chef1_outfit_index], func():
-        chef1_outfit_index = (chef1_outfit_index + 1) % OUTFIT_COLORS.size()
-        show_settings())
-    add_button(layout, "CHEF 2 OUTFIT: " + OUTFIT_NAMES[chef2_outfit_index], func():
-        chef2_outfit_index = (chef2_outfit_index + 1) % OUTFIT_COLORS.size()
-        show_settings(), Color("#559bb9"))
-    add_button(layout, "LANGUAGE: " + selected_language, func():
-        selected_language = "Filipino" if selected_language == "English" else "English"
-        show_settings(), PANEL)
+    add_button(layout, "CHEF 1 OUTFIT: " + OUTFIT_NAMES[chef1_outfit_index], cycle_chef1_outfit)
+    add_button(layout, "CHEF 2 OUTFIT: " + OUTFIT_NAMES[chef2_outfit_index], cycle_chef2_outfit, Color("#559bb9"))
+    add_button(layout, "LANGUAGE: " + selected_language, toggle_language, PANEL)
     add_button(layout, "BACK", show_menu, PANEL)
+
+func cycle_chef1_outfit() -> void:
+    chef1_outfit_index = (chef1_outfit_index + 1) % OUTFIT_COLORS.size()
     save_progress()
+    show_settings()
+
+func cycle_chef2_outfit() -> void:
+    chef2_outfit_index = (chef2_outfit_index + 1) % OUTFIT_COLORS.size()
+    save_progress()
+    show_settings()
+
+func toggle_language() -> void:
+    selected_language = "Filipino" if selected_language == "English" else "English"
+    save_progress()
+    show_settings()
 
 func show_shop() -> void:
     screen = "shop"
@@ -344,6 +353,9 @@ func join_lan_game() -> void:
 func start_host_match() -> void:
     if not is_network_game or not is_host:
         update_lobby("Only the host can start the online match.")
+        return
+    if multiplayer.get_peers().is_empty():
+        update_lobby("Waiting for your partner to join before starting.")
         return
     start_game("Co-op")
 
@@ -721,7 +733,10 @@ func show_results() -> void:
     layout.add_child(make_label("CUSTOMERS LOST: %d" % customers_lost, 19))
     layout.add_child(make_label("COINS EARNED: %d" % round_coins, 19, ORANGE))
     layout.add_child(make_label("BEST COMBO: %d" % best_combo, 19))
-    add_button(layout, "PLAY AGAIN", func(): start_game(game_mode), GREEN)
+    if not is_network_game or is_host:
+        add_button(layout, "PLAY AGAIN", func(): start_game(game_mode), GREEN)
+    else:
+        layout.add_child(make_label("Waiting for the host to start the next round.", 15))
     add_button(layout, "MAIN MENU", show_menu, PANEL)
 
 func set_status(message: String) -> void:
