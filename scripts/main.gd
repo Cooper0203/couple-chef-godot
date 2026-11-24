@@ -444,7 +444,7 @@ func build_kitchen_ui() -> void:
 
     ingredient_label = make_label("INGREDIENTS: 0 / 3", 18, CREAM)
     meal_label = make_label("READY MEALS: 0", 18, CREAM)
-    customers_label = make_label("SERVED: 0", 18, CREAM)
+    customers_label = make_label("CAREER GOAL: 0 / 5" if game_mode == "Career" else "SERVED: 0", 18, CREAM)
 
     stats.add_child(ingredient_label)
     stats.add_child(meal_label)
@@ -552,8 +552,7 @@ func refresh_ui() -> void:
         meal_label.text = "READY MEALS: " + str(cooked_meals)
 
     if customers_label:
-        customers_label.text = "SERVED: " + str(customers_served)
-
+        customers_label.text = "CAREER GOAL: " + str(customers_served) + " / 5" if game_mode == "Career" else "SERVED: " + str(customers_served)
     if status_label:
         status_label.text = status_text
 
@@ -612,9 +611,8 @@ func finish_game() -> void:
     if score > best_score:
         best_score = score
 
-    if game_mode == "Career" and customers_served >= 5:
-            unlocked_level = mini(30, maxi(unlocked_level, level + 1))
-
+        if game_mode == "Career" and customers_served >= 5:
+        unlocked_level = mini(30, maxi(unlocked_level, level + 1))
     save_progress()
 
     status_text = "TIME UP! ROUND COMPLETE!"
