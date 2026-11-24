@@ -298,6 +298,24 @@ func build_kitchen_ui() -> void:
     order.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     order_label = order
     layout.add_child(order)
+cooking_status_label = make_label("COOKING: WAITING", 18, CREAM)
+cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+layout.add_child(cooking_status_label)
+
+cooking_bar = ProgressBar.new()
+cooking_bar.max_value = 4.0
+cooking_bar.value = 0.0
+cooking_bar.custom_minimum_size = Vector2(0, 18)
+layout.add_child(cooking_bar)
+
+var patience_title := make_label("CUSTOMER PATIENCE", 16, CREAM)
+layout.add_child(patience_title)
+
+patience_bar = ProgressBar.new()
+patience_bar.max_value = 30.0
+patience_bar.value = 30.0
+patience_bar.custom_minimum_size = Vector2(0, 18)
+layout.add_child(patience_bar)
 
     var spacer := Control.new()
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -353,13 +371,23 @@ func prepare_ingredients() -> void:
 func cook_meal() -> void:
     if not game_running:
         return
+
+    if cooking_active:
+        status_text = "Your food is already cooking!"
+        refresh_ui()
+        return
+
     if ingredients < 3:
         status_text = "You need 3 ingredients before cooking!"
         refresh_ui()
         return
-    ingredients -= 3
-    cooked_meals += 1
-    status_text = "Delicious! Your meal is ready."
+
+    cooking_active = true
+    cooking_seconds = 0.0
+    cooking_bar.value = 0.0
+    cooking_status_label.text = "COOKING: 0%"
+    status_text = "Your meal is cooking! Please wait."
+    cooking_timer.start()
     refresh_ui()
 
 
@@ -375,7 +403,9 @@ func serve_meal() -> void:
     coins += 10
     status_text = "Customer served! +100 points and +10 coins!"
     refresh_ui()
-
+customer_patience = 30.0
+if patience_bar:
+    patience_bar.value = customer_patience
 
 func refresh_ui() -> void:
     if score_label:
@@ -390,14 +420,49 @@ func refresh_ui() -> void:
         status_label.text = status_text
 
 
+func func _on_cooking_tick() -> void:
+    if not cooking_active:
+        cooking_timer.stop()
+        return
+
+    cooking_seconds += 0.1
+    cooking_bar.value = cooking_seconds
+
+    var percentage := int((cooking_seconds / 4.0) * 100.0)
+    cooking_status_label.text = "COOKING: " + str(percentage) + "%"
+
+    if cooking_seconds >= 4.0:
+        cooking_timer.stop()
+        cooking_active = false
+        ingredients -= 3
+        cooked_meals += 1
+        cooking_bar.value = 4.0
+        cooking_status_label.text = "COOKING COMPLETE!"
+        status_text = "Delicious! Your meal is ready."
+        refresh_ui()
+
+
 func _on_timer() -> void:
     if not game_running:
         return
+
     time_left -= 1
+    customer_patience -= 1
+
+    if patience_bar:
+        patience_bar.value = customer_patience
+
+    if customer_patience <= 0:
+        customer_patience = 30.0
+        status_text = "Customer left! A new customer has arrived."
+
     refresh_ui()
+
     if time_left <= 0:
         game_running = false
         game_timer.stop()
+        cooking_timer.stop()
+        cooking_active = false
         status_text = "TIME UP! FINAL SCORE: " + str(score)
         refresh_ui()
 
