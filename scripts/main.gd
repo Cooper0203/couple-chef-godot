@@ -10,30 +10,47 @@ const GREEN := Color("#65bd83")
 const RED := Color("#e96b66")
 const PANEL := Color("#263d54")
 
+const ROUND_TIME := 120
+const COOKING_TIME := 4.0
+const CUSTOMER_PATIENCE := 30.0
+const INGREDIENTS_REQUIRED := 3
+const SAVE_PATH := "user://couple_chef.cfg"
+
 var screen := "menu"
 var game_mode := "Career"
 var restaurant := "Burger Restaurant"
+
 var score := 0
 var coins := 0
+var round_coins := 0
+var best_score := 0
 var ingredients := 0
 var cooked_meals := 0
-var time_left := 120
+var customers_served := 0
+var customers_lost := 0
+var time_left := ROUND_TIME
 var level := 1
+var unlocked_level := 1
+
 var game_running := false
 var status_text := "Welcome to Couple Chef!"
 var selected_language := "English"
 
 var score_label: Label
+var coins_label: Label
 var timer_label: Label
 var order_label: Label
 var status_label: Label
 var ingredient_label: Label
 var meal_label: Label
+var customers_label: Label
+
 var game_timer: Timer
 var cooking_timer: Timer
 var cooking_seconds := 0.0
 var cooking_active := false
-var customer_patience := 30.0
+var customer_patience := CUSTOMER_PATIENCE
+
 var cooking_bar: ProgressBar
 var patience_bar: ProgressBar
 var cooking_status_label: Label
@@ -41,6 +58,8 @@ var cooking_status_label: Label
 
 func _ready() -> void:
     get_viewport().size_changed.connect(queue_redraw)
+
+    load_progress()
 
     game_timer = Timer.new()
     game_timer.wait_time = 1.0
@@ -67,8 +86,10 @@ func _draw() -> void:
 
 func draw_menu_background(size: Vector2) -> void:
     draw_rect(Rect2(0, size.y * 0.60, size.x, size.y * 0.40), FLOOR)
+
     for x in range(0, int(size.x), 110):
         draw_line(Vector2(x, size.y * 0.60), Vector2(x, size.y), FLOOR_DARK, 3)
+
     for y in range(int(size.y * 0.60), int(size.y), 65):
         draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
 
@@ -80,41 +101,36 @@ func draw_menu_background(size: Vector2) -> void:
 
 func draw_kitchen(size: Vector2) -> void:
     draw_rect(Rect2(Vector2.ZERO, size), Color("#b9d7df"))
-
-    # Back wall
     draw_rect(Rect2(0, 0, size.x, size.y * 0.47), Color("#8bb6c5"))
     draw_rect(Rect2(0, size.y * 0.43, size.x, size.y * 0.08), Color("#f3d49c"))
 
-    # Tiled kitchen floor
     draw_rect(Rect2(0, size.y * 0.50, size.x, size.y * 0.50), FLOOR)
+
     for x in range(0, int(size.x), 100):
         draw_line(Vector2(x, size.y * 0.50), Vector2(x, size.y), FLOOR_DARK, 2)
+
     for y in range(int(size.y * 0.50), int(size.y), 65):
         draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
 
-    # Wall shelves
     draw_rect(Rect2(size.x * 0.08, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
     draw_rect(Rect2(size.x * 0.70, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
 
-    # Ingredient jars
     for i in range(4):
-        var jar_x := size.x * 0.11 + i * 62
+        var jar_x: float = size.x * 0.11 + i * 62.0
         draw_rect(Rect2(jar_x, size.y * 0.07, 30, 55), Color("#f5e6c8"))
         draw_rect(Rect2(jar_x + 4, size.y * 0.03, 22, 9), ORANGE)
 
-    # Cooking counter
     draw_rect(Rect2(size.x * 0.12, size.y * 0.54, size.x * 0.76, size.y * 0.22), Color("#87583e"))
     draw_rect(Rect2(size.x * 0.12, size.y * 0.52, size.x * 0.76, size.y * 0.07), Color("#f1c58b"))
 
-    # Three station illustrations
     var station_x := [0.25, 0.50, 0.75]
+
     for i in range(3):
         var x: float = size.x * float(station_x[i])
         draw_rect(Rect2(x - 65, size.y * 0.40, 130, 105), Color("#f6e6c9"))
         draw_rect(Rect2(x - 55, size.y * 0.43, 110, 65), Color("#4b6272"))
         draw_circle(Vector2(x, size.y * 0.47), 27, Color("#d7e3e5"))
 
-    # Pans and food
     draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 19, Color("#343c48"))
     draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 13, Color("#e9ad54"))
     draw_circle(Vector2(size.x * 0.50, size.y * 0.47), 19, Color("#343c48"))
@@ -122,11 +138,9 @@ func draw_kitchen(size: Vector2) -> void:
     draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 19, Color("#343c48"))
     draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 13, Color("#78b96d"))
 
-    # Two cartoon chefs
     draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), Color("#e96b66"))
     draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), Color("#5c91cf"))
 
-    # Customer waiting at the counter
     draw_circle(Vector2(size.x * 0.91, size.y * 0.40), 30, Color("#f2c29b"))
     draw_circle(Vector2(size.x * 0.91, size.y * 0.35), 31, Color("#5b463b"))
     draw_rect(Rect2(size.x * 0.87, size.y * 0.43, 75, 85), Color("#e7a45d"))
@@ -155,15 +169,15 @@ func clear_screen() -> void:
 
 func show_menu() -> void:
     game_timer.stop()
+    cooking_timer.stop()
+    cooking_active = false
     game_running = false
     screen = "menu"
+
     clear_screen()
     queue_redraw()
 
-    var margin := MarginContainer.new()
-    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    margin.add_theme_constant_override("margin_left", 70)
-    margin.add_theme_constant_override("margin_right", 70)
+    var margin := make_margin()
     margin.add_theme_constant_override("margin_top", 28)
     margin.add_theme_constant_override("margin_bottom", 28)
     add_child(margin)
@@ -181,8 +195,12 @@ func show_menu() -> void:
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(subtitle)
 
+    var info := make_label("COINS: " + str(coins) + "     BEST SCORE: " + str(best_score), 18, CREAM)
+    info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(info)
+
     var gap := Control.new()
-    gap.custom_minimum_size.y = 65
+    gap.custom_minimum_size.y = 35
     layout.add_child(gap)
 
     add_menu_button(layout, "CAREER MODE", show_restaurants, ORANGE)
@@ -203,6 +221,7 @@ func show_restaurants() -> void:
 
     var margin := make_margin()
     add_child(margin)
+
     var layout := VBoxContainer.new()
     layout.alignment = BoxContainer.ALIGNMENT_CENTER
     layout.add_theme_constant_override("separation", 12)
@@ -211,6 +230,10 @@ func show_restaurants() -> void:
     var title := make_label("CHOOSE YOUR RESTAURANT", 34, CREAM)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(title)
+
+    var progress := make_label("UNLOCKED CAREER LEVEL: " + str(unlocked_level), 18, CREAM)
+    progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(progress)
 
     add_menu_button(layout, "BURGER RESTAURANT  -  LEVELS 1-10", func(): choose_restaurant("Burger Restaurant"), ORANGE)
     add_menu_button(layout, "CAFE & BAKERY  -  LEVELS 11-20", func(): choose_restaurant("Cafe & Bakery"), Color("#b982c9"))
@@ -222,7 +245,6 @@ func show_restaurants() -> void:
 
 func choose_restaurant(name: String) -> void:
     restaurant = name
-    game_mode = "Career"
     start_game("Career")
 
 
@@ -233,6 +255,7 @@ func show_settings() -> void:
 
     var margin := make_margin()
     add_child(margin)
+
     var layout := VBoxContainer.new()
     layout.alignment = BoxContainer.ALIGNMENT_CENTER
     layout.add_theme_constant_override("separation", 18)
@@ -243,7 +266,7 @@ func show_settings() -> void:
     layout.add_child(title)
 
     add_menu_button(layout, "LANGUAGE: " + selected_language, toggle_language, PANEL)
-    add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in the audio milestone."), PANEL)
+    add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in a future update."), PANEL)
     add_menu_button(layout, "BACK", show_menu, ORANGE)
 
 
@@ -252,21 +275,27 @@ func toggle_language() -> void:
         selected_language = "Filipino"
     else:
         selected_language = "English"
+
     show_settings()
 
 
 func start_game(mode: String) -> void:
     game_mode = mode
     score = 0
+    round_coins = 0
     ingredients = 0
     cooked_meals = 0
-    time_left = 120
+    customers_served = 0
+    customers_lost = 0
+    time_left = ROUND_TIME
 
     cooking_seconds = 0.0
     cooking_active = false
-    customer_patience = 30.0
+    customer_patience = CUSTOMER_PATIENCE
 
+    game_timer.stop()
     cooking_timer.stop()
+
     game_running = true
     status_text = "Prepare ingredients, cook food, then serve!"
     screen = "kitchen"
@@ -277,6 +306,330 @@ func start_game(mode: String) -> void:
 
 
 func build_kitchen_ui() -> void:
+    clear_screen()
+
+    var margin := make_margin()
+    margin.add_theme_constant_override("margin_left", 28)
+    margin.add_theme_constant_override("margin_right", 28)
+    margin.add_theme_constant_override("margin_top", 15)
+    margin.add_theme_constant_override("margin_bottom", 15)
+    add_child(margin)
+
+    var layout := VBoxContainer.new()
+    layout.add_theme_constant_override("separation", 9)
+    margin.add_child(layout)
+
+    var top := HBoxContainer.new()
+    layout.add_child(top)
+
+    var heading := make_label(restaurant.to_upper(), 23, CREAM)
+    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    top.add_child(heading)
+
+    score_label = make_label("SCORE: " + str(score), 19, CREAM)
+    top.add_child(score_label)
+
+    coins_label = make_label("COINS: " + str(coins), 19, CREAM)
+    top.add_child(coins_label)
+
+    timer_label = make_label("TIME: " + str(time_left), 19, CREAM)
+    top.add_child(timer_label)
+
+    order_label = make_label("CUSTOMER ORDER:  3 INGREDIENTS  >  COOK  >  SERVE", 19, Color("#25384c"))
+    order_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(order_label)
+
+    cooking_status_label = make_label("COOKING: WAITING", 18, CREAM)
+    cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(cooking_status_label)
+
+    cooking_bar = ProgressBar.new()
+    cooking_bar.max_value = COOKING_TIME
+    cooking_bar.value = 0.0
+    cooking_bar.custom_minimum_size = Vector2(0, 18)
+    layout.add_child(cooking_bar)
+
+    var patience_title := make_label("CUSTOMER PATIENCE", 16, CREAM)
+    layout.add_child(patience_title)
+
+    patience_bar = ProgressBar.new()
+    patience_bar.max_value = CUSTOMER_PATIENCE
+    patience_bar.value = CUSTOMER_PATIENCE
+    patience_bar.custom_minimum_size = Vector2(0, 18)
+    layout.add_child(patience_bar)
+
+    var spacer := Control.new()
+    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    layout.add_child(spacer)
+
+    var stations := HBoxContainer.new()
+    stations.add_theme_constant_override("separation", 14)
+    layout.add_child(stations)
+
+    add_station(stations, "PREP STATION", "CHOP INGREDIENTS", prepare_ingredients, GREEN)
+    add_station(stations, "COOKING STATION", "COOK THE MEAL", cook_meal, ORANGE)
+    add_station(stations, "SERVING COUNTER", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
+
+    var stats := HBoxContainer.new()
+    stats.add_theme_constant_override("separation", 25)
+    layout.add_child(stats)
+
+    ingredient_label = make_label("INGREDIENTS: 0 / 3", 18, CREAM)
+    meal_label = make_label("READY MEALS: 0", 18, CREAM)
+    customers_label = make_label("SERVED: 0", 18, CREAM)
+
+    stats.add_child(ingredient_label)
+    stats.add_child(meal_label)
+    stats.add_child(customers_label)
+
+    status_label = make_label(status_text, 19, CREAM)
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(status_label)
+
+    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
+
+    refresh_ui()
+
+
+func add_station(parent: HBoxContainer, heading: String, action: String, callback: Callable, color: Color) -> void:
+    var column := VBoxContainer.new()
+    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    parent.add_child(column)
+
+    var title := make_label(heading, 18, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    column.add_child(title)
+
+    var button := make_button(action, callback, color)
+    button.custom_minimum_size = Vector2(0, 90)
+    column.add_child(button)
+
+
+func prepare_ingredients() -> void:
+    if not game_running:
+        return
+
+    if ingredients >= INGREDIENTS_REQUIRED:
+        status_text = "You have enough ingredients. Start cooking!"
+        refresh_ui()
+        return
+
+    ingredients += 1
+    status_text = "Ingredient prepared! Keep going."
+    refresh_ui()
+
+
+func cook_meal() -> void:
+    if not game_running:
+        return
+
+    if cooking_active:
+        status_text = "Your food is already cooking!"
+        refresh_ui()
+        return
+
+    if ingredients < INGREDIENTS_REQUIRED:
+        status_text = "You need 3 ingredients before cooking!"
+        refresh_ui()
+        return
+
+    cooking_active = true
+    cooking_seconds = 0.0
+    cooking_bar.value = 0.0
+    cooking_status_label.text = "COOKING: 0%"
+    status_text = "Your meal is cooking! Please wait."
+
+    cooking_timer.start()
+    refresh_ui()
+
+
+func serve_meal() -> void:
+    if not game_running:
+        return
+
+    if cooked_meals < 1:
+        status_text = "Cook a meal before serving!"
+        refresh_ui()
+        return
+
+    cooked_meals -= 1
+    score += 100
+    coins += 10
+    round_coins += 10
+    customers_served += 1
+    customer_patience = CUSTOMER_PATIENCE
+
+    patience_bar.value = customer_patience
+
+    status_text = "Customer served! +100 points and +10 coins!"
+
+    save_progress()
+    refresh_ui()
+
+
+func refresh_ui() -> void:
+    if score_label:
+        score_label.text = "SCORE: " + str(score)
+
+    if coins_label:
+        coins_label.text = "COINS: " + str(coins)
+
+    if timer_label:
+        timer_label.text = "TIME: " + str(time_left)
+
+    if ingredient_label:
+        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / 3"
+
+    if meal_label:
+        meal_label.text = "READY MEALS: " + str(cooked_meals)
+
+    if customers_label:
+        customers_label.text = "SERVED: " + str(customers_served)
+
+    if status_label:
+        status_label.text = status_text
+
+
+func _on_cooking_tick() -> void:
+    if not cooking_active:
+        cooking_timer.stop()
+        return
+
+    cooking_seconds += 0.1
+    cooking_bar.value = cooking_seconds
+
+    var percentage := int((cooking_seconds / COOKING_TIME) * 100.0)
+    cooking_status_label.text = "COOKING: " + str(percentage) + "%"
+
+    if cooking_seconds >= COOKING_TIME:
+        cooking_timer.stop()
+        cooking_active = false
+        ingredients -= INGREDIENTS_REQUIRED
+        cooked_meals += 1
+
+        cooking_bar.value = COOKING_TIME
+        cooking_status_label.text = "COOKING COMPLETE!"
+        status_text = "Delicious! Your meal is ready."
+
+        refresh_ui()
+
+
+func _on_timer() -> void:
+    if not game_running:
+        return
+
+    time_left -= 1
+    customer_patience -= 1
+
+    if patience_bar:
+        patience_bar.value = maxf(customer_patience, 0.0)
+
+    if customer_patience <= 0:
+        customers_lost += 1
+        customer_patience = CUSTOMER_PATIENCE
+        status_text = "Customer left! A new customer has arrived."
+
+    refresh_ui()
+
+    if time_left <= 0:
+        finish_game()
+
+
+func finish_game() -> void:
+    game_running = false
+    game_timer.stop()
+    cooking_timer.stop()
+    cooking_active = false
+
+    if score > best_score:
+        best_score = score
+
+    if game_mode == "Career" and customers_served >= 5:
+        unlocked_level = maxi(unlocked_level, level + 1)
+
+    save_progress()
+
+    status_text = "TIME UP! ROUND COMPLETE!"
+    show_results()
+
+
+func show_results() -> void:
+    screen = "results"
+    clear_screen()
+    queue_redraw()
+
+    var margin := make_margin()
+    margin.add_theme_constant_override("margin_left", 45)
+    margin.add_theme_constant_override("margin_right", 45)
+    add_child(margin)
+
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 14)
+    margin.add_child(layout)
+
+    var title := make_label("ROUND COMPLETE!", 42, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(title)
+
+    var restaurant_label := make_label(restaurant.to_upper() + "  |  " + game_mode.to_upper(), 20, CREAM)
+    restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(restaurant_label)
+
+    var gap := Control.new()
+    gap.custom_minimum_size.y = 15
+    layout.add_child(gap)
+
+    add_result_line(layout, "FINAL SCORE", str(score))
+    add_result_line(layout, "COINS EARNED", "+" + str(round_coins))
+    add_result_line(layout, "TOTAL COINS", str(coins))
+    add_result_line(layout, "CUSTOMERS SERVED", str(customers_served))
+    add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
+    add_result_line(layout, "BEST SCORE", str(best_score))
+
+    var message := "Great work, Chef!"
+
+    if customers_served >= 5:
+        message = "Amazing! Career progress unlocked!"
+
+    var message_label := make_label(message, 21, GREEN)
+    message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(message_label)
+
+    var button_gap := Control.new()
+    button_gap.custom_minimum_size.y = 12
+    layout.add_child(button_gap)
+
+    add_menu_button(layout, "PLAY AGAIN", func(): start_game(game_mode), ORANGE)
+    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
+
+
+func add_result_line(parent: VBoxContainer, heading: String, value: String) -> void:
+    var line := HBoxContainer.new()
+    parent.add_child(line)
+
+    var left := make_label(heading, 20, CREAM)
+    left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    line.add_child(left)
+
+    var right := make_label(value, 20, ORANGE)
+    right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    line.add_child(right)
+
+
+func load_progress() -> void:
+    var config := ConfigFile.new()
+    var error := config.load(SAVE_PATH)
+
+    if error != OK:
+        coins = 0
+        best_score = 0
+        unlocked_level = 1
+        return
+
+    coins = int(config.get_value("progress", "coins", 0))
+    best_score = int(config.get_value("progress", "best_score", 0))
+  en_ui() -> void:
     clear_screen()
 
     var margin := make_margin()
