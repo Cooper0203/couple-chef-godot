@@ -1,183 +1,452 @@
 
 extends Control
 
-var score: int = 0
-var ingredients: int = 0
-var cooked_meals: int = 0
-var time_left: int = 90
-var game_over: bool = false
+const BG := Color("#17283b")
+const FLOOR := Color("#d9a66b")
+const FLOOR_DARK := Color("#b77e4e")
+const CREAM := Color("#fff4df")
+const ORANGE := Color("#ff9d45")
+const GREEN := Color("#65bd83")
+const RED := Color("#e96b66")
+const PANEL := Color("#263d54")
+
+var screen := "menu"
+var game_mode := "Career"
+var restaurant := "Burger Restaurant"
+var score := 0
+var coins := 0
+var ingredients := 0
+var cooked_meals := 0
+var time_left := 120
+var level := 1
+var game_running := false
+var status_text := "Welcome to Couple Chef!"
+var selected_language := "English"
 
 var score_label: Label
 var timer_label: Label
+var order_label: Label
+var status_label: Label
 var ingredient_label: Label
 var meal_label: Label
-var status_label: Label
-var prepare_button: Button
-var cook_button: Button
-var serve_button: Button
 var game_timer: Timer
 
 
 func _ready() -> void:
-    build_game()
-    start_timer()
+    get_viewport().size_changed.connect(queue_redraw)
+    game_timer = Timer.new()
+    game_timer.wait_time = 1.0
+    game_timer.timeout.connect(_on_timer)
+    add_child(game_timer)
+    show_menu()
+
+
+func _draw() -> void:
+    var size := get_viewport_rect().size
+    draw_rect(Rect2(Vector2.ZERO, size), BG)
+
+    if screen == "kitchen":
+        draw_kitchen(size)
+    else:
+        draw_menu_background(size)
+
+
+func draw_menu_background(size: Vector2) -> void:
+    draw_rect(Rect2(0, size.y * 0.60, size.x, size.y * 0.40), FLOOR)
+    for x in range(0, int(size.x), 110):
+        draw_line(Vector2(x, size.y * 0.60), Vector2(x, size.y), FLOOR_DARK, 3)
+    for y in range(int(size.y * 0.60), int(size.y), 65):
+        draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
+
+    draw_circle(Vector2(size.x * 0.15, size.y * 0.18), 48, Color("#38556d"))
+    draw_circle(Vector2(size.x * 0.85, size.y * 0.18), 48, Color("#38556d"))
+    draw_circle(Vector2(size.x * 0.15, size.y * 0.18), 31, Color("#f6c66b"))
+    draw_circle(Vector2(size.x * 0.85, size.y * 0.18), 31, Color("#f6c66b"))
+
+
+func draw_kitchen(size: Vector2) -> void:
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#b9d7df"))
+
+    # Back wall
+    draw_rect(Rect2(0, 0, size.x, size.y * 0.47), Color("#8bb6c5"))
+    draw_rect(Rect2(0, size.y * 0.43, size.x, size.y * 0.08), Color("#f3d49c"))
+
+    # Tiled kitchen floor
+    draw_rect(Rect2(0, size.y * 0.50, size.x, size.y * 0.50), FLOOR)
+    for x in range(0, int(size.x), 100):
+        draw_line(Vector2(x, size.y * 0.50), Vector2(x, size.y), FLOOR_DARK, 2)
+    for y in range(int(size.y * 0.50), int(size.y), 65):
+        draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
+
+    # Wall shelves
+    draw_rect(Rect2(size.x * 0.08, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
+    draw_rect(Rect2(size.x * 0.70, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
+
+    # Ingredient jars
+    for i in range(4):
+        var jar_x := size.x * 0.11 + i * 62
+        draw_rect(Rect2(jar_x, size.y * 0.07, 30, 55), Color("#f5e6c8"))
+        draw_rect(Rect2(jar_x + 4, size.y * 0.03, 22, 9), ORANGE)
+
+    # Cooking counter
+    draw_rect(Rect2(size.x * 0.12, size.y * 0.54, size.x * 0.76, size.y * 0.22), Color("#87583e"))
+    draw_rect(Rect2(size.x * 0.12, size.y * 0.52, size.x * 0.76, size.y * 0.07), Color("#f1c58b"))
+
+    # Three station illustrations
+    var station_x := [0.25, 0.50, 0.75]
+    for i in range(3):
+        var x := size.x * station_x[i]
+        draw_rect(Rect2(x - 65, size.y * 0.40, 130, 105), Color("#f6e6c9"))
+        draw_rect(Rect2(x - 55, size.y * 0.43, 110, 65), Color("#4b6272"))
+        draw_circle(Vector2(x, size.y * 0.47), 27, Color("#d7e3e5"))
+
+    # Pans and food
+    draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 19, Color("#343c48"))
+    draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 13, Color("#e9ad54"))
+    draw_circle(Vector2(size.x * 0.50, size.y * 0.47), 19, Color("#343c48"))
+    draw_circle(Vector2(size.x * 0.50, size.y * 0.47), 13, Color("#b66a3c"))
+    draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 19, Color("#343c48"))
+    draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 13, Color("#78b96d"))
+
+    # Two cartoon chefs
+    draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), Color("#e96b66"))
+    draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), Color("#5c91cf"))
+
+    # Customer waiting at the counter
+    draw_circle(Vector2(size.x * 0.91, size.y * 0.40), 30, Color("#f2c29b"))
+    draw_circle(Vector2(size.x * 0.91, size.y * 0.35), 31, Color("#5b463b"))
+    draw_rect(Rect2(size.x * 0.87, size.y * 0.43, 75, 85), Color("#e7a45d"))
+    draw_circle(Vector2(size.x * 0.90, size.y * 0.40), 3, Color("#302c2a"))
+    draw_circle(Vector2(size.x * 0.93, size.y * 0.40), 3, Color("#302c2a"))
+
+
+func draw_chef(pos: Vector2, skin: Color, clothes: Color) -> void:
+    draw_circle(pos + Vector2(0, 24), 29, clothes)
+    draw_circle(pos, 22, skin)
+    draw_circle(pos + Vector2(-8, -3), 3, Color("#302c2a"))
+    draw_circle(pos + Vector2(8, -3), 3, Color("#302c2a"))
+    draw_arc(pos + Vector2(0, 4), 8, 0.2, 2.9, 12, Color("#8d5144"), 2)
+    draw_rect(Rect2(pos.x - 20, pos.y - 28, 40, 8), CREAM)
+    draw_circle(pos + Vector2(0, -30), 17, CREAM)
+    draw_circle(pos + Vector2(-12, -25), 9, CREAM)
+    draw_circle(pos + Vector2(12, -25), 9, CREAM)
+
+
+func clear_screen() -> void:
+    for child in get_children():
+        if child != game_timer:
+            remove_child(child)
+            child.queue_free()
+
+
+func show_menu() -> void:
+    game_timer.stop()
+    game_running = false
+    screen = "menu"
+    clear_screen()
+    queue_redraw()
+
+    var margin := MarginContainer.new()
+    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    margin.add_theme_constant_override("margin_left", 70)
+    margin.add_theme_constant_override("margin_right", 70)
+    margin.add_theme_constant_override("margin_top", 28)
+    margin.add_theme_constant_override("margin_bottom", 28)
+    add_child(margin)
+
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 13)
+    margin.add_child(layout)
+
+    var title := make_label("COUPLE CHEF", 52, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(title)
+
+    var subtitle := make_label("COOK TOGETHER. SERVE WITH LOVE.", 19, CREAM)
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(subtitle)
+
+    var gap := Control.new()
+    gap.custom_minimum_size.y = 65
+    layout.add_child(gap)
+
+    add_menu_button(layout, "CAREER MODE", show_restaurants, ORANGE)
+    add_menu_button(layout, "CO-OP MODE", func(): start_game("Co-op"), GREEN)
+    add_menu_button(layout, "VERSUS MODE", func(): start_game("Versus"), Color("#8d83d8"))
+    add_menu_button(layout, "PRACTICE MODE", func(): start_game("Practice"), Color("#559bb9"))
+    add_menu_button(layout, "SETTINGS / WIKA", show_settings, PANEL)
+
+    var footer := make_label("Two chefs. One kitchen. Endless fun!", 17, CREAM)
+    footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(footer)
+
+
+func show_restaurants() -> void:
+    screen = "restaurants"
+    clear_screen()
+    queue_redraw()
+
+    var margin := make_margin()
+    add_child(margin)
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 12)
+    margin.add_child(layout)
+
+    var title := make_label("CHOOSE YOUR RESTAURANT", 34, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(title)
+
+    add_menu_button(layout, "BURGER RESTAURANT  -  LEVELS 1-10", func(): choose_restaurant("Burger Restaurant"), ORANGE)
+    add_menu_button(layout, "CAFE & BAKERY  -  LEVELS 11-20", func(): choose_restaurant("Cafe & Bakery"), Color("#b982c9"))
+    add_menu_button(layout, "STEAKHOUSE  -  LEVELS 21-30", func(): choose_restaurant("Steakhouse"), RED)
+    add_menu_button(layout, "SEAFOOD RESTAURANT  -  COMING SOON", func(): set_status("More restaurants are coming in a future update."), PANEL)
+    add_menu_button(layout, "FAMILY DINER  -  COMING SOON", func(): set_status("More restaurants are coming in a future update."), PANEL)
+    add_menu_button(layout, "BACK", show_menu, PANEL)
+
+
+func choose_restaurant(name: String) -> void:
+    restaurant = name
+    game_mode = "Career"
+    start_game("Career")
+
+
+func show_settings() -> void:
+    screen = "settings"
+    clear_screen()
+    queue_redraw()
+
+    var margin := make_margin()
+    add_child(margin)
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 18)
+    margin.add_child(layout)
+
+    var title := make_label("SETTINGS / MGA SETTING", 34, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(title)
+
+    add_menu_button(layout, "LANGUAGE: " + selected_language, toggle_language, PANEL)
+    add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in the audio milestone."), PANEL)
+    add_menu_button(layout, "BACK", show_menu, ORANGE)
+
+
+func toggle_language() -> void:
+    if selected_language == "English":
+        selected_language = "Filipino"
+    else:
+        selected_language = "English"
+    show_settings()
+
+
+func start_game(mode: String) -> void:
+    game_mode = mode
+    score = 0
+    ingredients = 0
+    cooked_meals = 0
+    time_left = 120
+    game_running = true
+    status_text = "Prepare ingredients, cook food, then serve!"
+    screen = "kitchen"
+    build_kitchen_ui()
+    game_timer.start()
+    queue_redraw()
+
+
+func build_kitchen_ui() -> void:
+    clear_screen()
+
+    var margin := make_margin()
+    margin.add_theme_constant_override("margin_left", 28)
+    margin.add_theme_constant_override("margin_right", 28)
+    margin.add_theme_constant_override("margin_top", 15)
+    margin.add_theme_constant_override("margin_bottom", 15)
+    add_child(margin)
+
+    var layout := VBoxContainer.new()
+    layout.add_theme_constant_override("separation", 9)
+    margin.add_child(layout)
+
+    var top := HBoxContainer.new()
+    layout.add_child(top)
+
+    var heading := make_label(restaurant.to_upper(), 25, CREAM)
+    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    top.add_child(heading)
+
+    score_label = make_label("COINS: " + str(score), 22, CREAM)
+    top.add_child(score_label)
+    timer_label = make_label("TIME: " + str(time_left), 22, CREAM)
+    top.add_child(timer_label)
+
+    var order := make_label("CUSTOMER ORDER:  3 INGREDIENTS  >  COOK  >  SERVE", 19, Color("#25384c"))
+    order.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    order_label = order
+    layout.add_child(order)
+
+    var spacer := Control.new()
+    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    layout.add_child(spacer)
+
+    var stations := HBoxContainer.new()
+    stations.add_theme_constant_override("separation", 14)
+    layout.add_child(stations)
+
+    add_station(stations, "PREP STATION", "CHOP INGREDIENTS", prepare_ingredients, GREEN)
+    add_station(stations, "COOKING STATION", "COOK THE MEAL", cook_meal, ORANGE)
+    add_station(stations, "SERVING COUNTER", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
+
+    var stats := HBoxContainer.new()
+    stats.add_theme_constant_override("separation", 30)
+    layout.add_child(stats)
+
+    ingredient_label = make_label("INGREDIENTS: 0 / 3", 19, CREAM)
+    meal_label = make_label("READY MEALS: 0", 19, CREAM)
+    stats.add_child(ingredient_label)
+    stats.add_child(meal_label)
+
+    status_label = make_label(status_text, 19, CREAM)
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(status_label)
+
+    add_menu_button(layout, "PAUSE / MAIN MENU", show_menu, PANEL)
     refresh_ui()
 
 
-func build_game() -> void:
-    var background = ColorRect.new()
-    background.color = Color("#25334a")
-    background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(background)
+func add_station(parent: HBoxContainer, heading: String, action: String, callback: Callable, color: Color) -> void:
+    var column := VBoxContainer.new()
+    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    parent.add_child(column)
 
-    var margin = MarginContainer.new()
-    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    margin.add_theme_constant_override("margin_left", 28)
-    margin.add_theme_constant_override("margin_right", 28)
-    margin.add_theme_constant_override("margin_top", 24)
-    margin.add_theme_constant_override("margin_bottom", 24)
-    add_child(margin)
-
-    var layout = VBoxContainer.new()
-    layout.add_theme_constant_override("separation", 14)
-    margin.add_child(layout)
-
-    var title = Label.new()
-    title.text = "🍳 COUPLE CHEF"
+    var title := make_label(heading, 18, CREAM)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 38)
-    layout.add_child(title)
+    column.add_child(title)
 
-    var subtitle = Label.new()
-    subtitle.text = "Work together and serve delicious meals!"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    subtitle.add_theme_font_size_override("font_size", 20)
-    layout.add_child(subtitle)
-
-    var stats = HBoxContainer.new()
-    stats.add_theme_constant_override("separation", 20)
-    layout.add_child(stats)
-
-    score_label = make_label("Score: 0")
-    timer_label = make_label("Time: 90")
-    stats.add_child(score_label)
-    stats.add_child(timer_label)
-
-    var kitchen_title = make_label("YOUR KITCHEN")
-    kitchen_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(kitchen_title)
-
-    var chefs = HBoxContainer.new()
-    chefs.add_theme_constant_override("separation", 16)
-    layout.add_child(chefs)
-
-    var chef_one = make_button("👩 CHEF 1\nPREPARE INGREDIENTS")
-    chef_one.pressed.connect(prepare_ingredients)
-    chefs.add_child(chef_one)
-    prepare_button = chef_one
-
-    var chef_two = make_button("👨 CHEF 2\nCOOK MEALS")
-    chef_two.pressed.connect(cook_meal)
-    chefs.add_child(chef_two)
-    cook_button = chef_two
-
-    serve_button = make_button("🍽 SERVE CUSTOMER")
-    serve_button.pressed.connect(serve_meal)
-    layout.add_child(serve_button)
-
-    ingredient_label = make_label("Ingredients: 0 / 3")
-    meal_label = make_label("Cooked meals: 0")
-    status_label = make_label("Order: Prepare 3 ingredients, cook, then serve!")
-
-    ingredient_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    meal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-    layout.add_child(ingredient_label)
-    layout.add_child(meal_label)
-    layout.add_child(status_label)
-
-
-func make_label(value: String) -> Label:
-    var label = Label.new()
-    label.text = value
-    label.add_theme_font_size_override("font_size", 23)
-    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    return label
-
-
-func make_button(value: String) -> Button:
-    var button = Button.new()
-    button.text = value
-    button.custom_minimum_size = Vector2(0, 110)
-    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    button.add_theme_font_size_override("font_size", 22)
-    return button
+    var button := make_button(action, callback, color)
+    button.custom_minimum_size = Vector2(0, 90)
+    column.add_child(button)
 
 
 func prepare_ingredients() -> void:
-    if game_over:
+    if not game_running:
         return
-
     ingredients += 1
-    status_label.text = "Nice! Keep preparing ingredients."
+    status_text = "Ingredient prepared! Keep going."
     refresh_ui()
 
 
 func cook_meal() -> void:
-    if game_over:
+    if not game_running:
         return
-
     if ingredients < 3:
-        status_label.text = "You need 3 ingredients before cooking!"
+        status_text = "You need 3 ingredients before cooking!"
+        refresh_ui()
         return
-
     ingredients -= 3
     cooked_meals += 1
-    status_label.text = "Great teamwork! One meal is ready."
+    status_text = "Delicious! Your meal is ready."
     refresh_ui()
 
 
 func serve_meal() -> void:
-    if game_over:
+    if not game_running:
         return
-
     if cooked_meals < 1:
-        status_label.text = "Cook a meal before serving!"
+        status_text = "Cook a meal before serving!"
+        refresh_ui()
         return
-
     cooked_meals -= 1
     score += 100
-    status_label.text = "Customer served! +100 points!"
+    coins += 10
+    status_text = "Customer served! +100 points and +10 coins!"
     refresh_ui()
 
 
 func refresh_ui() -> void:
-    score_label.text = "Score: " + str(score)
-    timer_label.text = "Time: " + str(time_left)
-    ingredient_label.text = "Ingredients: " + str(ingredients) + " / 3"
-    meal_label.text = "Cooked meals: " + str(cooked_meals)
+    if score_label:
+        score_label.text = "COINS: " + str(score)
+    if timer_label:
+        timer_label.text = "TIME: " + str(time_left)
+    if ingredient_label:
+        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / 3"
+    if meal_label:
+        meal_label.text = "READY MEALS: " + str(cooked_meals)
+    if status_label:
+        status_label.text = status_text
 
 
-func start_timer() -> void:
-    game_timer = Timer.new()
-    game_timer.wait_time = 1.0
-    game_timer.timeout.connect(on_timer_timeout)
-    add_child(game_timer)
-    game_timer.start()
-
-
-func on_timer_timeout() -> void:
-    if game_over:
+func _on_timer() -> void:
+    if not game_running:
         return
-
     time_left -= 1
     refresh_ui()
-
     if time_left <= 0:
-        game_over = true
+        game_running = false
         game_timer.stop()
-        status_label.text = "TIME'S UP! Final score: " + str(score)
-        prepare_button.disabled = true
-        cook_button.disabled = true
-        serve_button.disabled = true
+        status_text = "TIME UP! FINAL SCORE: " + str(score)
+        refresh_ui()
+
+
+func make_margin() -> MarginContainer:
+    var margin := MarginContainer.new()
+    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    margin.add_theme_constant_override("margin_left", 65)
+    margin.add_theme_constant_override("margin_right", 65)
+    margin.add_theme_constant_override("margin_top", 25)
+    margin.add_theme_constant_override("margin_bottom", 25)
+    return margin
+
+
+func make_label(value: String, font_size: int, color: Color) -> Label:
+    var label := Label.new()
+    label.text = value
+    label.add_theme_font_size_override("font_size", font_size)
+    label.add_theme_color_override("font_color", color)
+    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    return label
+
+
+func make_button(value: String, callback: Callable, color: Color) -> Button:
+    var button := Button.new()
+    button.text = value
+    button.custom_minimum_size = Vector2(0, 52)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.add_theme_font_size_override("font_size", 19)
+    button.add_theme_color_override("font_color", Color("#ffffff"))
+
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = color
+    normal.corner_radius_top_left = 14
+    normal.corner_radius_top_right = 14
+    normal.corner_radius_bottom_left = 14
+    normal.corner_radius_bottom_right = 14
+    normal.content_margin_left = 12
+    normal.content_margin_right = 12
+    normal.content_margin_top = 8
+    normal.content_margin_bottom = 8
+    button.add_theme_stylebox_override("normal", normal)
+
+    var hover := normal.duplicate()
+    hover.bg_color = color.lightened(0.13)
+    button.add_theme_stylebox_override("hover", hover)
+
+    var pressed_style := normal.duplicate()
+    pressed_style.bg_color = color.darkened(0.15)
+    button.add_theme_stylebox_override("pressed", pressed_style)
+
+    button.pressed.connect(callback)
+    return button
+
+
+func add_menu_button(parent: VBoxContainer, value: String, callback: Callable, color: Color) -> void:
+    var button := make_button(value, callback, color)
+    button.custom_minimum_size = Vector2(0, 55)
+    parent.add_child(button)
+
+
+func set_status(message: String) -> void:
+    status_text = message
+    if status_label:
+        status_label.text = message
