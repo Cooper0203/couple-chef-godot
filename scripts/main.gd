@@ -9,6 +9,16 @@ const ORANGE := Color("#ff9d45")
 const GREEN := Color("#65bd83")
 const RED := Color("#e96b66")
 const PANEL := Color("#263d54")
+const CHEF_OUTFIT_NAMES := ["RED", "BLUE", "GREEN", "PURPLE", "ORANGE", "PINK"]
+
+const CHEF_OUTFIT_COLORS := [
+    Color("#e96b66"),
+    Color("#559bb9"),
+    Color("#65bd83"),
+    Color("#8d83d8"),
+    Color("#ff9d45"),
+    Color("#e78db5")
+]
 
 const ROUND_TIME := 120
 const COOKING_TIME := 4.0
@@ -35,6 +45,8 @@ var unlocked_level := 1
 var game_running := false
 var status_text := "Welcome to Couple Chef!"
 var selected_language := "English"
+var chef1_outfit_index := 0
+var chef2_outfit_index := 1
 
 var score_label: Label
 var coins_label: Label
@@ -138,9 +150,8 @@ func draw_kitchen(size: Vector2) -> void:
     draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 19, Color("#343c48"))
     draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 13, Color("#78b96d"))
 
-    draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), Color("#e96b66"))
-    draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), Color("#5c91cf"))
-
+    draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), CHEF_OUTFIT_COLORS[chef1_outfit_index])
+    draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), CHEF_OUTFIT_COLORS[chef2_outfit_index])
     draw_circle(Vector2(size.x * 0.91, size.y * 0.40), 30, Color("#f2c29b"))
     draw_circle(Vector2(size.x * 0.91, size.y * 0.35), 31, Color("#5b463b"))
     draw_rect(Rect2(size.x * 0.87, size.y * 0.43, 75, 85), Color("#e7a45d"))
@@ -334,9 +345,19 @@ func show_settings() -> void:
     layout.add_child(title)
 
     add_menu_button(layout, "LANGUAGE: " + selected_language, toggle_language, PANEL)
+    add_menu_button(layout, "CHEF 1 OUTFIT: " + CHEF_OUTFIT_NAMES[chef1_outfit_index], func(): cycle_chef_outfit(1), ORANGE)
+    add_menu_button(layout, "CHEF 2 OUTFIT: " + CHEF_OUTFIT_NAMES[chef2_outfit_index], func(): cycle_chef_outfit(2), Color("#559bb9"))
     add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in a future update."), PANEL)
     add_menu_button(layout, "BACK", show_menu, ORANGE)
 
+func cycle_chef_outfit(chef_number: int) -> void:
+    if chef_number == 1:
+        chef1_outfit_index = (chef1_outfit_index + 1) % 6
+    else:
+        chef2_outfit_index = (chef2_outfit_index + 1) % 6
+
+    save_progress()
+    show_settings()
 
 func toggle_language() -> void:
     if selected_language == "English":
@@ -697,6 +718,8 @@ func load_progress() -> void:
     coins = int(config.get_value("progress", "coins", 0))
     best_score = int(config.get_value("progress", "best_score", 0))
     unlocked_level = int(config.get_value("progress", "unlocked_level", 1))
+    chef1_outfit_index = clampi(int(config.get_value("progress", "chef1_outfit", 0)), 0, 5)
+    chef2_outfit_index = clampi(int(config.get_value("progress", "chef2_outfit", 1)), 0, 5)
 
 
 func save_progress() -> void:
@@ -705,7 +728,8 @@ func save_progress() -> void:
     config.set_value("progress", "coins", coins)
     config.set_value("progress", "best_score", best_score)
     config.set_value("progress", "unlocked_level", unlocked_level)
-
+    config.set_value("progress", "chef1_outfit", chef1_outfit_index)
+    config.set_value("progress", "chef2_outfit", chef2_outfit_index)
     config.save(SAVE_PATH)
 
 
