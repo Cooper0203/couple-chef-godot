@@ -44,8 +44,14 @@ func _ready() -> void:
     game_timer = Timer.new()
     game_timer.wait_time = 1.0
     game_timer.timeout.connect(_on_timer)
-    add_child(game_timer)
-    show_menu()
+add_child(game_timer)
+
+cooking_timer = Timer.new()
+cooking_timer.wait_time = 0.1
+cooking_timer.timeout.connect(_on_cooking_tick)
+add_child(cooking_timer)
+
+show_menu()
 
 
 func _draw() -> void:
