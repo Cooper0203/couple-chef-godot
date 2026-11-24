@@ -30,6 +30,13 @@ var status_label: Label
 var ingredient_label: Label
 var meal_label: Label
 var game_timer: Timer
+var cooking_timer: Timer
+var cooking_seconds := 0.0
+var cooking_active := false
+var customer_patience := 30.0
+var cooking_bar: ProgressBar
+var patience_bar: ProgressBar
+var cooking_status_label: Label
 
 
 func _ready() -> void:
