@@ -41,17 +41,18 @@ var cooking_status_label: Label
 
 func _ready() -> void:
     get_viewport().size_changed.connect(queue_redraw)
+
     game_timer = Timer.new()
     game_timer.wait_time = 1.0
     game_timer.timeout.connect(_on_timer)
-add_child(game_timer)
+    add_child(game_timer)
 
-cooking_timer = Timer.new()
-cooking_timer.wait_time = 0.1
-cooking_timer.timeout.connect(_on_cooking_tick)
-add_child(cooking_timer)
+    cooking_timer = Timer.new()
+    cooking_timer.wait_time = 0.1
+    cooking_timer.timeout.connect(_on_cooking_tick)
+    add_child(cooking_timer)
 
-show_menu()
+    show_menu()
 
 
 func _draw() -> void:
@@ -260,9 +261,16 @@ func start_game(mode: String) -> void:
     ingredients = 0
     cooked_meals = 0
     time_left = 120
+
+    cooking_seconds = 0.0
+    cooking_active = false
+    customer_patience = 30.0
+
+    cooking_timer.stop()
     game_running = true
     status_text = "Prepare ingredients, cook food, then serve!"
     screen = "kitchen"
+
     build_kitchen_ui()
     game_timer.start()
     queue_redraw()
@@ -298,24 +306,24 @@ func build_kitchen_ui() -> void:
     order.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     order_label = order
     layout.add_child(order)
-cooking_status_label = make_label("COOKING: WAITING", 18, CREAM)
-cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-layout.add_child(cooking_status_label)
+    cooking_status_label = make_label("COOKING: WAITING", 18, CREAM)
+    cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(cooking_status_label)
 
-cooking_bar = ProgressBar.new()
-cooking_bar.max_value = 4.0
-cooking_bar.value = 0.0
-cooking_bar.custom_minimum_size = Vector2(0, 18)
-layout.add_child(cooking_bar)
+    cooking_bar = ProgressBar.new()
+    cooking_bar.max_value = 4.0
+    cooking_bar.value = 0.0
+    cooking_bar.custom_minimum_size = Vector2(0, 18)
+    layout.add_child(cooking_bar)
 
-var patience_title := make_label("CUSTOMER PATIENCE", 16, CREAM)
-layout.add_child(patience_title)
+    var patience_title := make_label("CUSTOMER PATIENCE", 16, CREAM)
+    layout.add_child(patience_title)
 
-patience_bar = ProgressBar.new()
-patience_bar.max_value = 30.0
-patience_bar.value = 30.0
-patience_bar.custom_minimum_size = Vector2(0, 18)
-layout.add_child(patience_bar)
+    patience_bar = ProgressBar.new()
+    patience_bar.max_value = 30.0
+    patience_bar.value = 30.0
+    patience_bar.custom_minimum_size = Vector2(0, 18)
+    layout.add_child(patience_bar)
 
     var spacer := Control.new()
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -394,18 +402,22 @@ func cook_meal() -> void:
 func serve_meal() -> void:
     if not game_running:
         return
+
     if cooked_meals < 1:
         status_text = "Cook a meal before serving!"
         refresh_ui()
         return
+
     cooked_meals -= 1
     score += 100
     coins += 10
+    customer_patience = 30.0
+
+    if patience_bar:
+        patience_bar.value = customer_patience
+
     status_text = "Customer served! +100 points and +10 coins!"
     refresh_ui()
-customer_patience = 30.0
-if patience_bar:
-    patience_bar.value = customer_patience
 
 func refresh_ui() -> void:
     if score_label:
