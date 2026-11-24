@@ -24,6 +24,7 @@ const ROUND_TIME := 120
 const COOKING_TIME := 4.0
 const CUSTOMER_PATIENCE := 30.0
 const INGREDIENTS_REQUIRED := 3
+const CAREER_COMPLETION_BONUS := 50
 const SAVE_PATH := "user://couple_chef.cfg"
 
 var screen := "menu"
@@ -44,6 +45,7 @@ var customers_lost := 0
 var time_left := ROUND_TIME
 var level := 1
 var unlocked_level := 1
+var career_bonus_earned := 0
 
 var game_running := false
 var game_paused := false
@@ -77,7 +79,6 @@ var cooking_status_label: Label
 
 func _ready() -> void:
     get_viewport().size_changed.connect(queue_redraw)
-
     load_progress()
 
     game_timer = Timer.new()
@@ -122,7 +123,6 @@ func draw_kitchen(size: Vector2) -> void:
     draw_rect(Rect2(Vector2.ZERO, size), Color("#b9d7df"))
     draw_rect(Rect2(0, 0, size.x, size.y * 0.47), Color("#8bb6c5"))
     draw_rect(Rect2(0, size.y * 0.43, size.x, size.y * 0.08), Color("#f3d49c"))
-
     draw_rect(Rect2(0, size.y * 0.50, size.x, size.y * 0.50), FLOOR)
 
     for x in range(0, int(size.x), 100):
@@ -189,6 +189,7 @@ func show_menu() -> void:
     game_timer.stop()
     cooking_timer.stop()
     cooking_active = false
+    game_running = false
     game_paused = false
     pause_button = null
     screen = "menu"
@@ -358,6 +359,7 @@ func show_settings() -> void:
     add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in a future update."), PANEL)
     add_menu_button(layout, "BACK", show_menu, ORANGE)
 
+
 func cycle_chef_outfit(chef_number: int) -> void:
     if chef_number == 1:
         chef1_outfit_index = (chef1_outfit_index + 1) % 6
@@ -367,6 +369,7 @@ func cycle_chef_outfit(chef_number: int) -> void:
     save_progress()
     show_settings()
 
+
 func toggle_language() -> void:
     if selected_language == "English":
         selected_language = "Filipino"
@@ -374,6 +377,8 @@ func toggle_language() -> void:
         selected_language = "English"
 
     show_settings()
+
+
 func generate_customer_order() -> void:
     var order_number := randi_range(0, 2)
 
@@ -393,6 +398,7 @@ func start_game(mode: String) -> void:
     game_mode = mode
     score = 0
     round_coins = 0
+    career_bonus_earned = 0
     ingredients = 0
     cooked_meals = 0
     customers_served = 0
@@ -454,6 +460,7 @@ func build_kitchen_ui() -> void:
 
     timer_label = make_label("TIME: " + str(time_left), 19, CREAM)
     top.add_child(timer_label)
+
     pause_button = make_button("PAUSE", toggle_pause, ORANGE)
     pause_button.custom_minimum_size = Vector2(95, 45)
     top.add_child(pause_button)
@@ -510,7 +517,6 @@ func build_kitchen_ui() -> void:
     layout.add_child(status_label)
 
     add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
-
     refresh_ui()
 
 
@@ -552,7 +558,7 @@ func cook_meal() -> void:
         return
 
     if ingredients < current_ingredients_required:
-        status_text = "You need 3 ingredients before cooking!"
+        status_text = "You need " + str(current_ingredients_required) + " ingredients before cooking!"
         refresh_ui()
         return
 
@@ -587,7 +593,6 @@ func serve_meal() -> void:
         order_label.text = "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE"
 
     patience_bar.value = customer_patience
-
     status_text = "Customer served! +100 points and +10 coins!"
 
     save_progress()
@@ -612,8 +617,10 @@ func refresh_ui() -> void:
 
     if customers_label:
         customers_label.text = "CAREER GOAL: " + str(customers_served) + " / 5" if game_mode == "Career" else "SERVED: " + str(customers_served)
+
     if status_label:
         status_label.text = status_text
+
 
 func toggle_pause() -> void:
     if not game_running:
@@ -633,7 +640,6 @@ func toggle_pause() -> void:
         status_text = "GAME PAUSED. Take your time!"
     else:
         game_paused = false
-
         game_timer.start(maxf(paused_game_time, 0.001))
 
         if cooking_active:
@@ -643,6 +649,7 @@ func toggle_pause() -> void:
         status_text = "Game resumed! Keep cooking!"
 
     refresh_ui()
+
 
 func _on_cooking_tick() -> void:
     if game_paused:
@@ -666,7 +673,7 @@ func _on_cooking_tick() -> void:
 
         cooking_bar.value = COOKING_TIME
         cooking_status_label.text = "COOKING COMPLETE!"
-        status_text = "Delicious! Your meal is ready."
+        status_text = "Delicious! Your meal is ready!"
 
         refresh_ui()
 
@@ -703,6 +710,9 @@ func finish_game() -> void:
         best_score = score
 
     if game_mode == "Career" and customers_served >= 5:
+        career_bonus_earned = CAREER_COMPLETION_BONUS
+        coins += career_bonus_earned
+        round_coins += career_bonus_earned
         unlocked_level = mini(30, maxi(unlocked_level, level + 1))
 
     save_progress()
@@ -745,17 +755,22 @@ func show_results() -> void:
     add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
     add_result_line(layout, "BEST SCORE", str(best_score))
 
+    if career_bonus_earned > 0:
+        add_result_line(layout, "CAREER COMPLETION BONUS", "+" + str(career_bonus_earned))
+
     var message := "Great work, Chef!"
 
     if game_mode == "Career" and customers_served >= 5 and level < 30:
-        message = "Amazing! Level " + str(level + 1) + " unlocked!"
+        message = "Amazing! Level " + str(level + 1) + " unlocked! +50 BONUS COINS!"
     elif game_mode == "Career" and customers_served >= 5 and level == 30:
-        message = "Congratulations! You completed all 30 Career Levels!"
+        message = "Congratulations! You completed all 30 Career Levels! +50 BONUS COINS!"
     elif game_mode == "Career":
         message = "Serve 5 customers to unlock the next level!"
+
     var message_label := make_label(message, 21, GREEN)
     message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(message_label)
+
     var button_gap := Control.new()
     button_gap.custom_minimum_size.y = 12
     layout.add_child(button_gap)
@@ -775,6 +790,7 @@ func add_result_line(parent: VBoxContainer, heading: String, value: String) -> v
     var right := make_label(value, 20, ORANGE)
     right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     line.add_child(right)
+
 
 func load_progress() -> void:
     var config := ConfigFile.new()
@@ -867,4 +883,3 @@ func set_status(message: String) -> void:
 
     if status_label:
         status_label.text = message
-
