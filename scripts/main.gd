@@ -256,12 +256,17 @@ func show_restaurants() -> void:
 
     add_menu_button(layout, "BACK", show_menu, PANEL)
 
+
 func show_levels(restaurant_name: String, first_level: int, last_level: int) -> void:
     screen = "levels"
     clear_screen()
     queue_redraw()
 
     var margin := make_margin()
+    margin.add_theme_constant_override("margin_left", 35)
+    margin.add_theme_constant_override("margin_right", 35)
+    margin.add_theme_constant_override("margin_top", 20)
+    margin.add_theme_constant_override("margin_bottom", 20)
     add_child(margin)
 
     var layout := VBoxContainer.new()
@@ -273,20 +278,31 @@ func show_levels(restaurant_name: String, first_level: int, last_level: int) -> 
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(title)
 
-    var progress := make_label("SELECT AN UNLOCKED LEVEL", 18, GREEN)
+    var progress := make_label("UNLOCKED THROUGH LEVEL " + str(unlocked_level), 18, GREEN)
     progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(progress)
+
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    layout.add_child(scroll)
+
+    var level_list := VBoxContainer.new()
+    level_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    level_list.add_theme_constant_override("separation", 8)
+    scroll.add_child(level_list)
 
     for level_number in range(first_level, last_level + 1):
         var selected_level := level_number
         var level_button := make_button(
-            "LEVEL " + str(selected_level),
+            "LEVEL " + str(selected_level) + ("  -  LOCKED" if selected_level > unlocked_level else "  -  PLAY"),
             func(): start_career_level(restaurant_name, selected_level),
             ORANGE
         )
 
         level_button.disabled = selected_level > unlocked_level
-        layout.add_child(level_button)
+        level_list.add_child(level_button)
 
     add_menu_button(layout, "BACK", show_restaurants, PANEL)
 
