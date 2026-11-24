@@ -10,21 +10,17 @@ const GREEN := Color("#65bd83")
 const RED := Color("#e96b66")
 const PANEL := Color("#263d54")
 const CHEF_OUTFIT_NAMES := ["RED", "BLUE", "GREEN", "PURPLE", "ORANGE", "PINK"]
-
 const CHEF_OUTFIT_COLORS := [
-    Color("#e96b66"),
-    Color("#559bb9"),
-    Color("#65bd83"),
-    Color("#8d83d8"),
-    Color("#ff9d45"),
-    Color("#e78db5")
+    Color("#e96b66"), Color("#559bb9"), Color("#65bd83"),
+    Color("#8d83d8"), Color("#ff9d45"), Color("#e78db5")
 ]
 
 const ROUND_TIME := 120
 const COOKING_TIME := 4.0
 const CUSTOMER_PATIENCE := 30.0
-const INGREDIENTS_REQUIRED := 3
 const CAREER_COMPLETION_BONUS := 50
+const COMBO_THREE_BONUS := 5
+const COMBO_FIVE_BONUS := 10
 const SAVE_PATH := "user://couple_chef.cfg"
 
 var screen := "menu"
@@ -45,13 +41,18 @@ var customers_lost := 0
 var time_left := ROUND_TIME
 var level := 1
 var unlocked_level := 1
+
 var career_bonus_earned := 0
+var combo_bonus_earned := 0
+var current_combo := 0
+var best_combo := 0
 
 var game_running := false
 var game_paused := false
 var paused_game_time := 0.0
 var paused_cooking_time := 0.0
 var pause_button: Button
+
 var status_text := "Welcome to Couple Chef!"
 var selected_language := "English"
 var chef1_outfit_index := 0
@@ -65,6 +66,7 @@ var status_label: Label
 var ingredient_label: Label
 var meal_label: Label
 var customers_label: Label
+var combo_label: Label
 
 var game_timer: Timer
 var cooking_timer: Timer
@@ -159,6 +161,7 @@ func draw_kitchen(size: Vector2) -> void:
 
     draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), CHEF_OUTFIT_COLORS[chef1_outfit_index])
     draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), CHEF_OUTFIT_COLORS[chef2_outfit_index])
+
     draw_circle(Vector2(size.x * 0.91, size.y * 0.40), 30, Color("#f2c29b"))
     draw_circle(Vector2(size.x * 0.91, size.y * 0.35), 31, Color("#5b463b"))
     draw_rect(Rect2(size.x * 0.87, size.y * 0.43, 75, 85), Color("#e7a45d"))
@@ -255,8 +258,7 @@ func show_restaurants() -> void:
     progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(progress)
 
-    var burger := make_button("BURGER RESTAURANT  -  LEVELS 1-10", func(): show_levels("Burger Restaurant", 1, 10), ORANGE)
-    layout.add_child(burger)
+    layout.add_child(make_button("BURGER RESTAURANT  -  LEVELS 1-10", func(): show_levels("Burger Restaurant", 1, 10), ORANGE))
 
     var cafe := make_button("CAFE & BAKERY  -  LEVELS 11-20", func(): show_levels("Cafe & Bakery", 11, 20), Color("#b982c9"))
     cafe.disabled = unlocked_level < 11
@@ -320,7 +322,6 @@ func show_levels(restaurant_name: String, first_level: int, last_level: int) -> 
             func(): start_career_level(restaurant_name, selected_level),
             ORANGE
         )
-
         level_button.disabled = selected_level > unlocked_level
         level_list.add_child(level_button)
 
@@ -371,11 +372,7 @@ func cycle_chef_outfit(chef_number: int) -> void:
 
 
 func toggle_language() -> void:
-    if selected_language == "English":
-        selected_language = "Filipino"
-    else:
-        selected_language = "English"
-
+    selected_language = "Filipino" if selected_language == "English" else "English"
     show_settings()
 
 
@@ -399,13 +396,16 @@ func start_game(mode: String) -> void:
     score = 0
     round_coins = 0
     career_bonus_earned = 0
+    combo_bonus_earned = 0
+    current_combo = 0
+    best_combo = 0
     ingredients = 0
     cooked_meals = 0
     customers_served = 0
     customers_lost = 0
+
     generate_customer_order()
     time_left = ROUND_TIME
-
     cooking_seconds = 0.0
     cooking_active = false
     game_paused = false
@@ -413,7 +413,6 @@ func start_game(mode: String) -> void:
     paused_cooking_time = 0.0
 
     round_customer_patience = CUSTOMER_PATIENCE
-
     if game_mode == "Career":
         round_customer_patience = maxf(15.0, CUSTOMER_PATIENCE - float(level - 1) * 0.5)
 
@@ -501,16 +500,18 @@ func build_kitchen_ui() -> void:
     add_station(stations, "SERVING COUNTER", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
 
     var stats := HBoxContainer.new()
-    stats.add_theme_constant_override("separation", 25)
+    stats.add_theme_constant_override("separation", 15)
     layout.add_child(stats)
 
-    ingredient_label = make_label("INGREDIENTS: 0 / 3", 18, CREAM)
-    meal_label = make_label("READY MEALS: 0", 18, CREAM)
-    customers_label = make_label("CAREER GOAL: 0 / 5" if game_mode == "Career" else "SERVED: 0", 18, CREAM)
+    ingredient_label = make_label("INGREDIENTS: 0 / 3", 16, CREAM)
+    meal_label = make_label("READY MEALS: 0", 16, CREAM)
+    customers_label = make_label("CAREER GOAL: 0 / 5" if game_mode == "Career" else "SERVED: 0", 16, CREAM)
+    combo_label = make_label("COMBO: 0", 16, ORANGE)
 
     stats.add_child(ingredient_label)
     stats.add_child(meal_label)
     stats.add_child(customers_label)
+    stats.add_child(combo_label)
 
     status_label = make_label(status_text, 19, CREAM)
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -567,7 +568,6 @@ func cook_meal() -> void:
     cooking_bar.value = 0.0
     cooking_status_label.text = "COOKING: 0%"
     status_text = "Your meal is cooking! Please wait."
-
     cooking_timer.start()
     refresh_ui()
 
@@ -586,6 +586,23 @@ func serve_meal() -> void:
     coins += 10
     round_coins += 10
     customers_served += 1
+
+    current_combo += 1
+    best_combo = maxi(best_combo, current_combo)
+
+    var combo_message := ""
+
+    if current_combo == 3:
+        coins += COMBO_THREE_BONUS
+        round_coins += COMBO_THREE_BONUS
+        combo_bonus_earned += COMBO_THREE_BONUS
+        combo_message = "  3 CUSTOMER COMBO! +5 BONUS COINS!"
+    elif current_combo == 5:
+        coins += COMBO_FIVE_BONUS
+        round_coins += COMBO_FIVE_BONUS
+        combo_bonus_earned += COMBO_FIVE_BONUS
+        combo_message = "  5 CUSTOMER COMBO! +10 BONUS COINS!"
+
     generate_customer_order()
     customer_patience = round_customer_patience
 
@@ -593,7 +610,7 @@ func serve_meal() -> void:
         order_label.text = "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE"
 
     patience_bar.value = customer_patience
-    status_text = "Customer served! +100 points and +10 coins!"
+    status_text = "Customer served! +100 points and +10 coins!" + combo_message
 
     save_progress()
     refresh_ui()
@@ -618,6 +635,9 @@ func refresh_ui() -> void:
     if customers_label:
         customers_label.text = "CAREER GOAL: " + str(customers_served) + " / 5" if game_mode == "Career" else "SERVED: " + str(customers_served)
 
+    if combo_label:
+        combo_label.text = "COMBO: " + str(current_combo)
+
     if status_label:
         status_label.text = status_text
 
@@ -628,13 +648,11 @@ func toggle_pause() -> void:
 
     if not game_paused:
         paused_game_time = game_timer.time_left
-
         if cooking_active:
             paused_cooking_time = cooking_timer.time_left
 
         game_timer.stop()
         cooking_timer.stop()
-
         game_paused = true
         pause_button.text = "RESUME"
         status_text = "GAME PAUSED. Take your time!"
@@ -670,11 +688,9 @@ func _on_cooking_tick() -> void:
         cooking_active = false
         ingredients -= current_ingredients_required
         cooked_meals += 1
-
         cooking_bar.value = COOKING_TIME
         cooking_status_label.text = "COOKING COMPLETE!"
         status_text = "Delicious! Your meal is ready!"
-
         refresh_ui()
 
 
@@ -690,8 +706,9 @@ func _on_timer() -> void:
 
     if customer_patience <= 0:
         customers_lost += 1
+        current_combo = 0
         customer_patience = round_customer_patience
-        status_text = "Customer left! A new customer has arrived."
+        status_text = "Customer left! Your combo was reset."
 
     refresh_ui()
 
@@ -716,7 +733,6 @@ func finish_game() -> void:
         unlocked_level = mini(30, maxi(unlocked_level, level + 1))
 
     save_progress()
-
     status_text = "TIME UP! ROUND COMPLETE!"
     show_results()
 
@@ -754,6 +770,8 @@ func show_results() -> void:
     add_result_line(layout, "CUSTOMERS SERVED", str(customers_served))
     add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
     add_result_line(layout, "BEST SCORE", str(best_score))
+    add_result_line(layout, "BEST COMBO", str(best_combo))
+    add_result_line(layout, "COMBO BONUS COINS", "+" + str(combo_bonus_earned))
 
     if career_bonus_earned > 0:
         add_result_line(layout, "CAREER COMPLETION BONUS", "+" + str(career_bonus_earned))
@@ -811,7 +829,6 @@ func load_progress() -> void:
 
 func save_progress() -> void:
     var config := ConfigFile.new()
-
     config.set_value("progress", "coins", coins)
     config.set_value("progress", "best_score", best_score)
     config.set_value("progress", "unlocked_level", unlocked_level)
