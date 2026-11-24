@@ -43,6 +43,10 @@ var level := 1
 var unlocked_level := 1
 
 var game_running := false
+var game_paused := false
+var paused_game_time := 0.0
+var paused_cooking_time := 0.0
+var pause_button: Button
 var status_text := "Welcome to Couple Chef!"
 var selected_language := "English"
 var chef1_outfit_index := 0
@@ -182,7 +186,8 @@ func show_menu() -> void:
     game_timer.stop()
     cooking_timer.stop()
     cooking_active = false
-    game_running = false
+    game_paused = false
+    pause_button = null
     screen = "menu"
 
     clear_screen()
@@ -380,7 +385,11 @@ func start_game(mode: String) -> void:
 
     cooking_seconds = 0.0
     cooking_active = false
-        round_customer_patience = CUSTOMER_PATIENCE
+    game_paused = false
+    paused_game_time = 0.0
+    paused_cooking_time = 0.0
+
+    round_customer_patience = CUSTOMER_PATIENCE
 
     if game_mode == "Career":
         round_customer_patience = maxf(15.0, CUSTOMER_PATIENCE - float(level - 1) * 0.5)
@@ -428,6 +437,9 @@ func build_kitchen_ui() -> void:
 
     timer_label = make_label("TIME: " + str(time_left), 19, CREAM)
     top.add_child(timer_label)
+    pause_button = make_button("PAUSE", toggle_pause, ORANGE)
+    pause_button.custom_minimum_size = Vector2(95, 45)
+    top.add_child(pause_button)
 
     order_label = make_label("CUSTOMER ORDER:  3 INGREDIENTS  >  COOK  >  SERVE", 19, Color("#25384c"))
     order_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -500,7 +512,7 @@ func add_station(parent: HBoxContainer, heading: String, action: String, callbac
 
 
 func prepare_ingredients() -> void:
-    if not game_running:
+    if not game_running or game_paused:
         return
 
     if ingredients >= INGREDIENTS_REQUIRED:
@@ -514,7 +526,7 @@ func prepare_ingredients() -> void:
 
 
 func cook_meal() -> void:
-    if not game_running:
+    if not game_running or game_paused:
         return
 
     if cooking_active:
@@ -538,7 +550,7 @@ func cook_meal() -> void:
 
 
 func serve_meal() -> void:
-    if not game_running:
+    if not game_running or game_paused:
         return
 
     if cooked_meals < 1:
@@ -582,6 +594,34 @@ func refresh_ui() -> void:
     if status_label:
         status_label.text = status_text
 
+func toggle_pause() -> void:
+    if not game_running:
+        return
+
+    if not game_paused:
+        paused_game_time = game_timer.time_left
+
+        if cooking_active:
+            paused_cooking_time = cooking_timer.time_left
+
+        game_timer.stop()
+        cooking_timer.stop()
+
+        game_paused = true
+        pause_button.text = "RESUME"
+        status_text = "GAME PAUSED. Take your time!"
+    else:
+        game_paused = false
+
+        game_timer.start(maxf(paused_game_time, 0.001))
+
+        if cooking_active:
+            cooking_timer.start(maxf(paused_cooking_time, 0.001))
+
+        pause_button.text = "PAUSE"
+        status_text = "Game resumed! Keep cooking!"
+
+    refresh_ui()
 
 func _on_cooking_tick() -> void:
     if not cooking_active:
@@ -608,7 +648,7 @@ func _on_cooking_tick() -> void:
 
 
 func _on_timer() -> void:
-    if not game_running:
+    if not game_running or game_paused:
         return
 
     time_left -= 1
@@ -630,6 +670,7 @@ func _on_timer() -> void:
 
 func finish_game() -> void:
     game_running = false
+    game_paused = false
     game_timer.stop()
     cooking_timer.stop()
     cooking_active = false
@@ -637,8 +678,9 @@ func finish_game() -> void:
     if score > best_score:
         best_score = score
 
-        if game_mode == "Career" and customers_served >= 5:
+    if game_mode == "Career" and customers_served >= 5:
         unlocked_level = mini(30, maxi(unlocked_level, level + 1))
+
     save_progress()
 
     status_text = "TIME UP! ROUND COMPLETE!"
