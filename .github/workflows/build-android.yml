@@ -10,20 +10,46 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.7.2
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Prepare output folder
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip fontconfig
+
+      - name: Install Godot and export templates
+        run: |
+          V="4.7.2"
+          mkdir -p "$HOME/godot" "$HOME/.local/share/godot/export_templates/$V.stable"
+          curl -L --fail -o "$HOME/godot/godot.zip" "https://github.com/godotengine/godot/releases/download/$V-stable/Godot_v$V-stable_linux.x86_64.zip"
+          unzip -q "$HOME/godot/godot.zip" -d "$HOME/godot"
+          sudo install "$HOME/godot/Godot_v$V-stable_linux.x86_64" /usr/local/bin/godot
+          curl -L --fail -o "$HOME/godot/templates.tpz" "https://github.com/godotengine/godot/releases/download/$V-stable/Godot_v$V-stable_export_templates.tpz"
+          unzip -q "$HOME/godot/templates.tpz" -d "$HOME/godot/templates"
+          cp -a "$HOME/godot/templates/templates/." "$HOME/.local/share/godot/export_templates/$V.stable/"
+
+      - name: Prepare output
         run: mkdir -p build
 
-      - name: Validate Godot project
+      - name: Validate project
         run: godot --headless --editor --path . --quit
 
-      - name: Export Android debug APK
+      - name: Export Android APK
         run: godot --headless --path . --export-debug "Android" build/CoupleChef.apk
 
       - name: Upload APK
@@ -33,4 +59,3 @@ jobs:
           path: build/CoupleChef.apk
           if-no-files-found: error
           retention-days: 14
-          
