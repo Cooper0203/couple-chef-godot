@@ -1,0 +1,36 @@
+
+name: Build Couple Chef Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.7.2
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Prepare output folder
+        run: mkdir -p build
+
+      - name: Validate Godot project
+        run: godot --headless --editor --path . --quit
+
+      - name: Export Android debug APK
+        run: godot --headless --path . --export-debug "Android" build/CoupleChef.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoupleChef-Android-APK
+          path: build/CoupleChef.apk
+          if-no-files-found: error
+          retention-days: 14
+          
