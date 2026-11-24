@@ -227,24 +227,76 @@ func show_restaurants() -> void:
     layout.add_theme_constant_override("separation", 12)
     margin.add_child(layout)
 
-    var title := make_label("CHOOSE YOUR RESTAURANT", 34, CREAM)
+    var title := make_label("CHOOSE YOUR RESTAURANT", 30, CREAM)
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(title)
 
-    var progress := make_label("UNLOCKED CAREER LEVEL: " + str(unlocked_level), 18, CREAM)
+    var progress := make_label("HIGHEST UNLOCKED LEVEL: " + str(unlocked_level), 18, GREEN)
     progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(progress)
 
-    add_menu_button(layout, "BURGER RESTAURANT  -  LEVELS 1-10", func(): choose_restaurant("Burger Restaurant"), ORANGE)
-    add_menu_button(layout, "CAFE & BAKERY  -  LEVELS 11-20", func(): choose_restaurant("Cafe & Bakery"), Color("#b982c9"))
-    add_menu_button(layout, "STEAKHOUSE  -  LEVELS 21-30", func(): choose_restaurant("Steakhouse"), RED)
-    add_menu_button(layout, "SEAFOOD RESTAURANT  -  COMING SOON", func(): set_status("More restaurants are coming in a future update."), PANEL)
-    add_menu_button(layout, "FAMILY DINER  -  COMING SOON", func(): set_status("More restaurants are coming in a future update."), PANEL)
+    var burger := make_button("BURGER RESTAURANT  -  LEVELS 1-10", func(): show_levels("Burger Restaurant", 1, 10), ORANGE)
+    layout.add_child(burger)
+
+    var cafe := make_button("CAFE & BAKERY  -  LEVELS 11-20", func(): show_levels("Cafe & Bakery", 11, 20), Color("#b982c9"))
+    cafe.disabled = unlocked_level < 11
+    layout.add_child(cafe)
+
+    var steakhouse := make_button("STEAKHOUSE  -  LEVELS 21-30", func(): show_levels("Steakhouse", 21, 30), RED)
+    steakhouse.disabled = unlocked_level < 21
+    layout.add_child(steakhouse)
+
+    var seafood := make_button("SEAFOOD RESTAURANT  -  COMING SOON", func(): set_status("Coming in a future update."), PANEL)
+    seafood.disabled = true
+    layout.add_child(seafood)
+
+    var diner := make_button("FAMILY DINER  -  COMING SOON", func(): set_status("Coming in a future update."), PANEL)
+    diner.disabled = true
+    layout.add_child(diner)
+
     add_menu_button(layout, "BACK", show_menu, PANEL)
 
+func show_levels(restaurant_name: String, first_level: int, last_level: int) -> void:
+    screen = "levels"
+    clear_screen()
+    queue_redraw()
 
-func choose_restaurant(name: String) -> void:
-    restaurant = name
+    var margin := make_margin()
+    add_child(margin)
+
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 10)
+    margin.add_child(layout)
+
+    var title := make_label(restaurant_name.to_upper(), 30, CREAM)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(title)
+
+    var progress := make_label("SELECT AN UNLOCKED LEVEL", 18, GREEN)
+    progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    layout.add_child(progress)
+
+    for level_number in range(first_level, last_level + 1):
+        var selected_level := level_number
+        var level_button := make_button(
+            "LEVEL " + str(selected_level),
+            func(): start_career_level(restaurant_name, selected_level),
+            ORANGE
+        )
+
+        level_button.disabled = selected_level > unlocked_level
+        layout.add_child(level_button)
+
+    add_menu_button(layout, "BACK", show_restaurants, PANEL)
+
+
+func start_career_level(restaurant_name: String, selected_level: int) -> void:
+    if selected_level > unlocked_level:
+        return
+
+    restaurant = restaurant_name
+    level = selected_level
     start_game("Career")
 
 
@@ -572,7 +624,7 @@ func show_results() -> void:
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(title)
 
-    var restaurant_label := make_label(restaurant.to_upper() + "  |  " + game_mode.to_upper(), 20, CREAM)
+    var restaurant_label := make_label(restaurant.to_upper() + "  |  LEVEL " + str(level) + "  |  " + game_mode.to_upper(), 20, CREAM)
     restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(restaurant_label)
 
@@ -589,9 +641,10 @@ func show_results() -> void:
 
     var message := "Great work, Chef!"
 
-    if customers_served >= 5:
-        message = "Amazing! Career progress unlocked!"
-
+    if game_mode == "Career" and customers_served >= 5:
+    message = "Amazing! Level " + str(level + 1) + " unlocked!"
+    elif game_mode == "Career":
+    message = "Serve 5 customers to unlock the next level!"
     var message_label := make_label(message, 21, GREEN)
     message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(message_label)
