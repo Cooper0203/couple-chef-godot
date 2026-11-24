@@ -835,6 +835,35 @@ func _on_timer() -> void:
 func make_margin() -> MarginContainer:
     var margin := MarginContainer.new()
     margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+func load_progress() -> void:
+    var config := ConfigFile.new()
+    var error := config.load(SAVE_PATH)
+
+    if error != OK:
+        coins = 0
+        best_score = 0
+        unlocked_level = 1
+        return
+
+    coins = int(config.get_value("progress", "coins", 0))
+    best_score = int(config.get_value("progress", "best_score", 0))
+    unlocked_level = int(config.get_value("progress", "unlocked_level", 1))
+
+
+func save_progress() -> void:
+    var config := ConfigFile.new()
+
+    config.set_value("progress", "coins", coins)
+    config.set_value("progress", "best_score", best_score)
+    config.set_value("progress", "unlocked_level", unlocked_level)
+
+    config.save(SAVE_PATH)
+
+
+func make_margin() -> MarginContainer:
+    var margin := MarginContainer.new()
+    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     margin.add_theme_constant_override("margin_left", 65)
     margin.add_theme_constant_override("margin_right", 65)
     margin.add_theme_constant_override("margin_top", 25)
@@ -869,6 +898,7 @@ func make_button(value: String, callback: Callable, color: Color) -> Button:
     normal.content_margin_right = 12
     normal.content_margin_top = 8
     normal.content_margin_bottom = 8
+
     button.add_theme_stylebox_override("normal", normal)
 
     var hover := normal.duplicate()
@@ -891,5 +921,7 @@ func add_menu_button(parent: VBoxContainer, value: String, callback: Callable, c
 
 func set_status(message: String) -> void:
     status_text = message
+
     if status_label:
         status_label.text = message
+
