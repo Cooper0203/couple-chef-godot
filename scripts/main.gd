@@ -690,61 +690,6 @@ func load_progress() -> void:
     add_station(stations, "COOKING STATION", "COOK THE MEAL", cook_meal, ORANGE)
     add_station(stations, "SERVING COUNTER", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
 
-    var stats := HBoxContainer.new()
-    stats.add_theme_constant_override("separation", 30)
-    layout.add_child(stats)
-
-    ingredient_label = make_label("INGREDIENTS: 0 / 3", 19, CREAM)
-    meal_label = make_label("READY MEALS: 0", 19, CREAM)
-    stats.add_child(ingredient_label)
-    stats.add_child(meal_label)
-
-    status_label = make_label(status_text, 19, CREAM)
-    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(status_label)
-
-    add_menu_button(layout, "PAUSE / MAIN MENU", show_menu, PANEL)
-    refresh_ui()
-
-
-func add_station(parent: HBoxContainer, heading: String, action: String, callback: Callable, color: Color) -> void:
-    var column := VBoxContainer.new()
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    parent.add_child(column)
-
-    var title := make_label(heading, 18, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    column.add_child(title)
-
-    var button := make_button(action, callback, color)
-    button.custom_minimum_size = Vector2(0, 90)
-    column.add_child(button)
-
-
-func prepare_ingredients() -> void:
-    if not game_running:
-        return
-    ingredients += 1
-    status_text = "Ingredient prepared! Keep going."
-    refresh_ui()
-
-
-func cook_meal() -> void:
-    if not game_running:
-        return
-
-    if cooking_active:
-        status_text = "Your food is already cooking!"
-        refresh_ui()
-        return
-
-    if ingredients < 3:
-        status_text = "You need 3 ingredients before cooking!"
-        refresh_ui()
-        return
-
-    cooking_active = true
-
 func load_progress() -> void:
     var config := ConfigFile.new()
     var error := config.load(SAVE_PATH)
