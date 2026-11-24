@@ -1,185 +1,122 @@
-
 extends Control
+# Couple Chef - consolidated Godot 4 main.gd
+# Replace the entire contents of scripts/main.gd with this file.
 
+const SAVE_PATH := "user://couple_chef.cfg"
+const PORT := 24567
+const MAX_CLIENTS := 1
+const ROUND_TIME := 120
+const PRACTICE_TIME := 180
+const CUSTOMER_PATIENCE := 30.0
 const BG := Color("#17283b")
-const FLOOR := Color("#d9a66b")
-const FLOOR_DARK := Color("#b77e4e")
 const CREAM := Color("#fff4df")
 const ORANGE := Color("#ff9d45")
 const GREEN := Color("#65bd83")
 const RED := Color("#e96b66")
 const PANEL := Color("#263d54")
-const CHEF_OUTFIT_NAMES := ["RED", "BLUE", "GREEN", "PURPLE", "ORANGE", "PINK"]
-const CHEF_OUTFIT_COLORS := [
+const OUTFIT_COLORS := [
     Color("#e96b66"), Color("#559bb9"), Color("#65bd83"),
     Color("#8d83d8"), Color("#ff9d45"), Color("#e78db5")
 ]
-
-const ROUND_TIME := 120
-const COOKING_TIME := 4.0
-const CUSTOMER_PATIENCE := 30.0
-const CAREER_COMPLETION_BONUS := 50
-const COMBO_THREE_BONUS := 5
-const COMBO_FIVE_BONUS := 10
-const SAVE_PATH := "user://couple_chef.cfg"
+const OUTFIT_NAMES := ["RED", "BLUE", "GREEN", "PURPLE", "ORANGE", "PINK"]
 
 var screen := "menu"
 var game_mode := "Career"
 var restaurant := "Burger Restaurant"
-
-var score := 0
-var coins := 0
-var round_coins := 0
-var best_score := 0
-var ingredients := 0
-var cooked_meals := 0
-
-var current_order_name := "Classic Burger"
-var current_ingredients_required := 3
-var customers_served := 0
-var customers_lost := 0
-var time_left := ROUND_TIME
 var level := 1
 var unlocked_level := 1
 
-var career_bonus_earned := 0
-var combo_bonus_earned := 0
+var coins := 0
+var best_score := 0
+var score := 0
+var round_coins := 0
+var customers_served := 0
+var customers_lost := 0
+var ingredients := 0
+var cooked_meals := 0
+var current_order_name := "Classic Burger"
+var current_ingredients_required := 3
 var current_combo := 0
 var best_combo := 0
+var career_bonus_earned := 0
 
 var game_running := false
 var game_paused := false
-var paused_game_time := 0.0
-var paused_cooking_time := 0.0
-var pause_button: Button
-
-var status_text := "Welcome to Couple Chef!"
-var selected_language := "English"
+var time_left := ROUND_TIME
+var customer_patience := CUSTOMER_PATIENCE
+var cooking_seconds := 0.0
+var cooking_active := false
+var patience_upgrade := 0
+var total_rounds_played := 0
+var achievements: Array[String] = []
+var last_daily_reward := ""
 var chef1_outfit_index := 0
 var chef2_outfit_index := 1
+var selected_language := "English"
 
+var is_network_game := false
+var is_host := false
+var host_ip := "127.0.0.1"
+var network_status := "Not connected"
+var lobby_status_label: Label
+var ip_input: LineEdit
+
+var game_timer: Timer
+var cooking_timer: Timer
+var status_label: Label
 var score_label: Label
 var coins_label: Label
 var timer_label: Label
 var order_label: Label
-var status_label: Label
 var ingredient_label: Label
 var meal_label: Label
 var customers_label: Label
 var combo_label: Label
-
-var game_timer: Timer
-var cooking_timer: Timer
-var cooking_seconds := 0.0
-var cooking_active := false
-var customer_patience := CUSTOMER_PATIENCE
-var round_customer_patience := CUSTOMER_PATIENCE
-var cooking_bar: ProgressBar
 var patience_bar: ProgressBar
-var cooking_status_label: Label
-
+var cooking_bar: ProgressBar
 
 func _ready() -> void:
-    get_viewport().size_changed.connect(queue_redraw)
+    randomize()
     load_progress()
-
     game_timer = Timer.new()
     game_timer.wait_time = 1.0
-    game_timer.timeout.connect(_on_timer)
+    game_timer.timeout.connect(_on_game_tick)
     add_child(game_timer)
-
     cooking_timer = Timer.new()
     cooking_timer.wait_time = 0.1
     cooking_timer.timeout.connect(_on_cooking_tick)
     add_child(cooking_timer)
-
+    multiplayer.peer_connected.connect(_on_peer_connected)
+    multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+    multiplayer.connected_to_server.connect(_on_connected_to_server)
+    multiplayer.connection_failed.connect(_on_connection_failed)
+    multiplayer.server_disconnected.connect(_on_server_disconnected)
     show_menu()
-
 
 func _draw() -> void:
     var size := get_viewport_rect().size
     draw_rect(Rect2(Vector2.ZERO, size), BG)
-
     if screen == "kitchen":
-        draw_kitchen(size)
+        draw_rect(Rect2(0, size.y * 0.48, size.x, size.y * 0.52), Color("#d9a66b"))
+        draw_rect(Rect2(size.x * 0.12, size.y * 0.48, size.x * 0.76, size.y * 0.20), Color("#87583e"))
+        for i in range(3):
+            var x := size.x * (0.25 + 0.25 * i)
+            draw_rect(Rect2(x - 55, size.y * 0.35, 110, 100), Color("#f6e6c9"))
+            draw_circle(Vector2(x, size.y * 0.40), 23, Color("#d7e3e5"))
+        draw_chef(Vector2(size.x * 0.40, size.y * 0.75), OUTFIT_COLORS[chef1_outfit_index])
+        draw_chef(Vector2(size.x * 0.60, size.y * 0.75), OUTFIT_COLORS[chef2_outfit_index])
     else:
-        draw_menu_background(size)
+        draw_rect(Rect2(0, size.y * 0.62, size.x, size.y * 0.38), Color("#d9a66b"))
+        for x in range(0, int(size.x), 100):
+            draw_line(Vector2(x, size.y * 0.62), Vector2(x, size.y), Color("#b77e4e"), 2)
 
-
-func draw_menu_background(size: Vector2) -> void:
-    draw_rect(Rect2(0, size.y * 0.60, size.x, size.y * 0.40), FLOOR)
-
-    for x in range(0, int(size.x), 110):
-        draw_line(Vector2(x, size.y * 0.60), Vector2(x, size.y), FLOOR_DARK, 3)
-
-    for y in range(int(size.y * 0.60), int(size.y), 65):
-        draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
-
-    draw_circle(Vector2(size.x * 0.15, size.y * 0.18), 48, Color("#38556d"))
-    draw_circle(Vector2(size.x * 0.85, size.y * 0.18), 48, Color("#38556d"))
-    draw_circle(Vector2(size.x * 0.15, size.y * 0.18), 31, Color("#f6c66b"))
-    draw_circle(Vector2(size.x * 0.85, size.y * 0.18), 31, Color("#f6c66b"))
-
-
-func draw_kitchen(size: Vector2) -> void:
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#b9d7df"))
-    draw_rect(Rect2(0, 0, size.x, size.y * 0.47), Color("#8bb6c5"))
-    draw_rect(Rect2(0, size.y * 0.43, size.x, size.y * 0.08), Color("#f3d49c"))
-    draw_rect(Rect2(0, size.y * 0.50, size.x, size.y * 0.50), FLOOR)
-
-    for x in range(0, int(size.x), 100):
-        draw_line(Vector2(x, size.y * 0.50), Vector2(x, size.y), FLOOR_DARK, 2)
-
-    for y in range(int(size.y * 0.50), int(size.y), 65):
-        draw_line(Vector2(0, y), Vector2(size.x, y), FLOOR_DARK, 2)
-
-    draw_rect(Rect2(size.x * 0.08, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
-    draw_rect(Rect2(size.x * 0.70, size.y * 0.13, size.x * 0.22, 16), Color("#79533f"))
-
-    for i in range(4):
-        var jar_x: float = size.x * 0.11 + i * 62.0
-        draw_rect(Rect2(jar_x, size.y * 0.07, 30, 55), Color("#f5e6c8"))
-        draw_rect(Rect2(jar_x + 4, size.y * 0.03, 22, 9), ORANGE)
-
-    draw_rect(Rect2(size.x * 0.12, size.y * 0.54, size.x * 0.76, size.y * 0.22), Color("#87583e"))
-    draw_rect(Rect2(size.x * 0.12, size.y * 0.52, size.x * 0.76, size.y * 0.07), Color("#f1c58b"))
-
-    var station_x := [0.25, 0.50, 0.75]
-
-    for i in range(3):
-        var x: float = size.x * float(station_x[i])
-        draw_rect(Rect2(x - 65, size.y * 0.40, 130, 105), Color("#f6e6c9"))
-        draw_rect(Rect2(x - 55, size.y * 0.43, 110, 65), Color("#4b6272"))
-        draw_circle(Vector2(x, size.y * 0.47), 27, Color("#d7e3e5"))
-
-    draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 19, Color("#343c48"))
-    draw_circle(Vector2(size.x * 0.25, size.y * 0.47), 13, Color("#e9ad54"))
-    draw_circle(Vector2(size.x * 0.50, size.y * 0.47), 19, Color("#343c48"))
-    draw_circle(Vector2(size.x * 0.50, size.y * 0.47), 13, Color("#b66a3c"))
-    draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 19, Color("#343c48"))
-    draw_circle(Vector2(size.x * 0.75, size.y * 0.47), 13, Color("#78b96d"))
-
-    draw_chef(Vector2(size.x * 0.39, size.y * 0.70), Color("#f4bd91"), CHEF_OUTFIT_COLORS[chef1_outfit_index])
-    draw_chef(Vector2(size.x * 0.61, size.y * 0.70), Color("#d99a6c"), CHEF_OUTFIT_COLORS[chef2_outfit_index])
-
-    draw_circle(Vector2(size.x * 0.91, size.y * 0.40), 30, Color("#f2c29b"))
-    draw_circle(Vector2(size.x * 0.91, size.y * 0.35), 31, Color("#5b463b"))
-    draw_rect(Rect2(size.x * 0.87, size.y * 0.43, 75, 85), Color("#e7a45d"))
-    draw_circle(Vector2(size.x * 0.90, size.y * 0.40), 3, Color("#302c2a"))
-    draw_circle(Vector2(size.x * 0.93, size.y * 0.40), 3, Color("#302c2a"))
-
-
-func draw_chef(pos: Vector2, skin: Color, clothes: Color) -> void:
-    draw_circle(pos + Vector2(0, 24), 29, clothes)
-    draw_circle(pos, 22, skin)
+func draw_chef(pos: Vector2, clothes: Color) -> void:
+    draw_circle(pos + Vector2(0, 24), 28, clothes)
+    draw_circle(pos, 22, Color("#f4bd91"))
     draw_circle(pos + Vector2(-8, -3), 3, Color("#302c2a"))
     draw_circle(pos + Vector2(8, -3), 3, Color("#302c2a"))
-    draw_arc(pos + Vector2(0, 4), 8, 0.2, 2.9, 12, Color("#8d5144"), 2)
     draw_rect(Rect2(pos.x - 20, pos.y - 28, 40, 8), CREAM)
     draw_circle(pos + Vector2(0, -30), 17, CREAM)
-    draw_circle(pos + Vector2(-12, -25), 9, CREAM)
-    draw_circle(pos + Vector2(12, -25), 9, CREAM)
-
 
 func clear_screen() -> void:
     for child in get_children():
@@ -187,1434 +124,30 @@ func clear_screen() -> void:
             remove_child(child)
             child.queue_free()
 
-
-func show_menu() -> void:
-    game_timer.stop()
-    cooking_timer.stop()
-    cooking_active = false
-    game_running = false
-    game_paused = false
-    pause_button = null
-    screen = "menu"
-
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_top", 28)
-    margin.add_theme_constant_override("margin_bottom", 28)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 13)
-    margin.add_child(layout)
-
-    var title := make_label("COUPLE CHEF", 52, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    var subtitle := make_label("COOK TOGETHER. SERVE WITH LOVE.", 19, CREAM)
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(subtitle)
-
-    var info := make_label("COINS: " + str(coins) + "     BEST SCORE: " + str(best_score), 18, CREAM)
-    info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(info)
-
-    var gap := Control.new()
-    gap.custom_minimum_size.y = 35
-    layout.add_child(gap)
-
-    add_menu_button(layout, "CAREER MODE", show_restaurants, ORANGE)
-    add_menu_button(layout, "CO-OP MODE", func(): start_game("Co-op"), GREEN)
-    add_menu_button(layout, "VERSUS MODE", func(): start_game("Versus"), Color("#8d83d8"))
-    add_menu_button(layout, "PRACTICE MODE", func(): start_game("Practice"), Color("#559bb9"))
-    add_menu_button(layout, "SETTINGS / WIKA", show_settings, PANEL)
-
-    var footer := make_label("Two chefs. One kitchen. Endless fun!", 17, CREAM)
-    footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(footer)
-
-
-func show_restaurants() -> void:
-    screen = "restaurants"
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 12)
-    margin.add_child(layout)
-
-    var title := make_label("CHOOSE YOUR RESTAURANT", 30, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    var progress := make_label("HIGHEST UNLOCKED LEVEL: " + str(unlocked_level), 18, GREEN)
-    progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(progress)
-
-    layout.add_child(make_button("BURGER RESTAURANT  -  LEVELS 1-10", func(): show_levels("Burger Restaurant", 1, 10), ORANGE))
-
-    var cafe := make_button("CAFE & BAKERY  -  LEVELS 11-20", func(): show_levels("Cafe & Bakery", 11, 20), Color("#b982c9"))
-    cafe.disabled = unlocked_level < 11
-    layout.add_child(cafe)
-
-    var steakhouse := make_button("STEAKHOUSE  -  LEVELS 21-30", func(): show_levels("Steakhouse", 21, 30), RED)
-    steakhouse.disabled = unlocked_level < 21
-    layout.add_child(steakhouse)
-
-    var seafood := make_button("SEAFOOD RESTAURANT  -  COMING SOON", func(): set_status("Coming in a future update."), PANEL)
-    seafood.disabled = true
-    layout.add_child(seafood)
-
-    var diner := make_button("FAMILY DINER  -  COMING SOON", func(): set_status("Coming in a future update."), PANEL)
-    diner.disabled = true
-    layout.add_child(diner)
-
-    add_menu_button(layout, "BACK", show_menu, PANEL)
-
-
-func show_levels(restaurant_name: String, first_level: int, last_level: int) -> void:
-    screen = "levels"
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_left", 35)
-    margin.add_theme_constant_override("margin_right", 35)
-    margin.add_theme_constant_override("margin_top", 20)
-    margin.add_theme_constant_override("margin_bottom", 20)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 10)
-    margin.add_child(layout)
-
-    var title := make_label(restaurant_name.to_upper(), 30, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    var progress := make_label("UNLOCKED THROUGH LEVEL " + str(unlocked_level), 18, GREEN)
-    progress.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(progress)
-
-    var scroll := ScrollContainer.new()
-    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    layout.add_child(scroll)
-
-    var level_list := VBoxContainer.new()
-    level_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    level_list.add_theme_constant_override("separation", 8)
-    scroll.add_child(level_list)
-
-    for level_number in range(first_level, last_level + 1):
-        var selected_level := level_number
-        var level_button := make_button(
-            "LEVEL " + str(selected_level) + ("  -  LOCKED" if selected_level > unlocked_level else "  -  PLAY"),
-            func(): start_career_level(restaurant_name, selected_level),
-            ORANGE
-        )
-        level_button.disabled = selected_level > unlocked_level
-        level_list.add_child(level_button)
-
-    add_menu_button(layout, "BACK", show_restaurants, PANEL)
-
-
-func start_career_level(restaurant_name: String, selected_level: int) -> void:
-    if selected_level > unlocked_level:
-        return
-
-    restaurant = restaurant_name
-    level = selected_level
-    start_game("Career")
-
-
-func show_settings() -> void:
-    screen = "settings"
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 18)
-    margin.add_child(layout)
-
-    var title := make_label("SETTINGS / MGA SETTING", 34, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    add_menu_button(layout, "LANGUAGE: " + selected_language, toggle_language, PANEL)
-    add_menu_button(layout, "CHEF 1 OUTFIT: " + CHEF_OUTFIT_NAMES[chef1_outfit_index], func(): cycle_chef_outfit(1), ORANGE)
-    add_menu_button(layout, "CHEF 2 OUTFIT: " + CHEF_OUTFIT_NAMES[chef2_outfit_index], func(): cycle_chef_outfit(2), Color("#559bb9"))
-    add_menu_button(layout, "MUSIC & SOUND", func(): set_status("Sound controls will be added in a future update."), PANEL)
-    add_menu_button(layout, "BACK", show_menu, ORANGE)
-
-
-func cycle_chef_outfit(chef_number: int) -> void:
-    if chef_number == 1:
-        chef1_outfit_index = (chef1_outfit_index + 1) % 6
-    else:
-        chef2_outfit_index = (chef2_outfit_index + 1) % 6
-
-    save_progress()
-    show_settings()
-
-
-func toggle_language() -> void:
-    selected_language = "Filipino" if selected_language == "English" else "English"
-    show_settings()
-
-
-func generate_customer_order() -> void:
-    var order_number := randi_range(0, 2)
-
-    match order_number:
-        0:
-            current_order_name = "Classic Burger"
-            current_ingredients_required = 3
-        1:
-            current_order_name = "Cheese Burger"
-            current_ingredients_required = 4
-        2:
-            current_order_name = "Double Burger"
-            current_ingredients_required = 5
-
-
-func start_game(mode: String) -> void:
-    game_mode = mode
-    score = 0
-    round_coins = 0
-    career_bonus_earned = 0
-    combo_bonus_earned = 0
-    current_combo = 0
-    best_combo = 0
-    ingredients = 0
-    cooked_meals = 0
-    customers_served = 0
-    customers_lost = 0
-
-    generate_customer_order()
-    time_left = ROUND_TIME
-    cooking_seconds = 0.0
-    cooking_active = false
-    game_paused = false
-    paused_game_time = 0.0
-    paused_cooking_time = 0.0
-
-    round_customer_patience = CUSTOMER_PATIENCE
-    if game_mode == "Career":
-        round_customer_patience = maxf(15.0, CUSTOMER_PATIENCE - float(level - 1) * 0.5)
-
-    customer_patience = round_customer_patience
-
-    game_timer.stop()
-    cooking_timer.stop()
-
-    game_running = true
-    status_text = "Prepare ingredients, cook food, then serve!"
-    screen = "kitchen"
-
-    build_kitchen_ui()
-    game_timer.start()
-    queue_redraw()
-
-
-func build_kitchen_ui() -> void:
-    clear_screen()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_left", 28)
-    margin.add_theme_constant_override("margin_right", 28)
-    margin.add_theme_constant_override("margin_top", 15)
-    margin.add_theme_constant_override("margin_bottom", 15)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.add_theme_constant_override("separation", 9)
-    margin.add_child(layout)
-
-    var top := HBoxContainer.new()
-    layout.add_child(top)
-
-    var heading := make_label(restaurant.to_upper(), 23, CREAM)
-    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(heading)
-
-    score_label = make_label("SCORE: " + str(score), 19, CREAM)
-    top.add_child(score_label)
-
-    coins_label = make_label("COINS: " + str(coins), 19, CREAM)
-    top.add_child(coins_label)
-
-    timer_label = make_label("TIME: " + str(time_left), 19, CREAM)
-    top.add_child(timer_label)
-
-    pause_button = make_button("PAUSE", toggle_pause, ORANGE)
-    pause_button.custom_minimum_size = Vector2(95, 45)
-    top.add_child(pause_button)
-
-    order_label = make_label("ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE", 19, Color("#25384c"))
-    order_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(order_label)
-
-    cooking_status_label = make_label("COOKING: WAITING", 18, CREAM)
-    cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(cooking_status_label)
-
-    cooking_bar = ProgressBar.new()
-    cooking_bar.max_value = COOKING_TIME
-    cooking_bar.value = 0.0
-    cooking_bar.custom_minimum_size = Vector2(0, 18)
-    layout.add_child(cooking_bar)
-
-    var patience_title := make_label("CUSTOMER PATIENCE", 16, CREAM)
-    layout.add_child(patience_title)
-
-    patience_bar = ProgressBar.new()
-    patience_bar.max_value = round_customer_patience
-    patience_bar.value = round_customer_patience
-    patience_bar.custom_minimum_size = Vector2(0, 18)
-    layout.add_child(patience_bar)
-
-    var spacer := Control.new()
-    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    layout.add_child(spacer)
-
-    var stations := HBoxContainer.new()
-    stations.add_theme_constant_override("separation", 14)
-    layout.add_child(stations)
-
-    add_station(stations, "PREP STATION", "CHOP INGREDIENTS", prepare_ingredients, GREEN)
-    add_station(stations, "COOKING STATION", "COOK THE MEAL", cook_meal, ORANGE)
-    add_station(stations, "SERVING COUNTER", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
-
-    var stats := HBoxContainer.new()
-    stats.add_theme_constant_override("separation", 15)
-    layout.add_child(stats)
-
-    ingredient_label = make_label("INGREDIENTS: 0 / 3", 16, CREAM)
-    meal_label = make_label("READY MEALS: 0", 16, CREAM)
-    customers_label = make_label("CAREER GOAL: 0 / 5" if game_mode == "Career" else "SERVED: 0", 16, CREAM)
-    combo_label = make_label("COMBO: 0", 16, ORANGE)
-
-    stats.add_child(ingredient_label)
-    stats.add_child(meal_label)
-    stats.add_child(customers_label)
-    stats.add_child(combo_label)
-
-    status_label = make_label(status_text, 19, CREAM)
-    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(status_label)
-
-    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
-    refresh_ui()
-
-
-func add_station(parent: HBoxContainer, heading: String, action: String, callback: Callable, color: Color) -> void:
-    var column := VBoxContainer.new()
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    parent.add_child(column)
-
-    var title := make_label(heading, 18, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    column.add_child(title)
-
-    var button := make_button(action, callback, color)
-    button.custom_minimum_size = Vector2(0, 90)
-    column.add_child(button)
-
-
-func prepare_ingredients() -> void:
-    if not game_running or game_paused:
-        return
-
-    if ingredients >= current_ingredients_required:
-        status_text = "You have enough ingredients. Start cooking!"
-        refresh_ui()
-        return
-
-    ingredients += 1
-    status_text = "Ingredient prepared! Keep going."
-    refresh_ui()
-
-
-func cook_meal() -> void:
-    if not game_running or game_paused:
-        return
-
-    if cooking_active:
-        status_text = "Your food is already cooking!"
-        refresh_ui()
-        return
-
-    if ingredients < current_ingredients_required:
-        status_text = "You need " + str(current_ingredients_required) + " ingredients before cooking!"
-        refresh_ui()
-        return
-
-    cooking_active = true
-    cooking_seconds = 0.0
-    cooking_bar.value = 0.0
-    cooking_status_label.text = "COOKING: 0%"
-    status_text = "Your meal is cooking! Please wait."
-    cooking_timer.start()
-    refresh_ui()
-
-
-func serve_meal() -> void:
-    if not game_running or game_paused:
-        return
-
-    if cooked_meals < 1:
-        status_text = "Cook a meal before serving!"
-        refresh_ui()
-        return
-
-    cooked_meals -= 1
-    score += 100
-    coins += 10
-    round_coins += 10
-    customers_served += 1
-
-    current_combo += 1
-    best_combo = maxi(best_combo, current_combo)
-
-    var combo_message := ""
-
-    if current_combo == 3:
-        coins += COMBO_THREE_BONUS
-        round_coins += COMBO_THREE_BONUS
-        combo_bonus_earned += COMBO_THREE_BONUS
-        combo_message = "  3 CUSTOMER COMBO! +5 BONUS COINS!"
-    elif current_combo == 5:
-        coins += COMBO_FIVE_BONUS
-        round_coins += COMBO_FIVE_BONUS
-        combo_bonus_earned += COMBO_FIVE_BONUS
-        combo_message = "  5 CUSTOMER COMBO! +10 BONUS COINS!"
-
-    generate_customer_order()
-    customer_patience = round_customer_patience
-
-    if order_label:
-        order_label.text = "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS > COOK > SERVE"
-
-    patience_bar.value = customer_patience
-    status_text = "Customer served! +100 points and +10 coins!" + combo_message
-
-    save_progress()
-    refresh_ui()
-
-
-func refresh_ui() -> void:
-    if score_label:
-        score_label.text = "SCORE: " + str(score)
-
-    if coins_label:
-        coins_label.text = "COINS: " + str(coins)
-
-    if timer_label:
-        timer_label.text = "TIME: " + str(time_left)
-
-    if ingredient_label:
-        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / " + str(current_ingredients_required)
-
-    if meal_label:
-        meal_label.text = "READY MEALS: " + str(cooked_meals)
-
-    if customers_label:
-        customers_label.text = "CAREER GOAL: " + str(customers_served) + " / 5" if game_mode == "Career" else "SERVED: " + str(customers_served)
-
-    if combo_label:
-        combo_label.text = "COMBO: " + str(current_combo)
-
-    if status_label:
-        status_label.text = status_text
-
-
-func toggle_pause() -> void:
-    if not game_running:
-        return
-
-    if not game_paused:
-        paused_game_time = game_timer.time_left
-        if cooking_active:
-            paused_cooking_time = cooking_timer.time_left
-
-        game_timer.stop()
-        cooking_timer.stop()
-        game_paused = true
-        pause_button.text = "RESUME"
-        status_text = "GAME PAUSED. Take your time!"
-    else:
-        game_paused = false
-        game_timer.start(maxf(paused_game_time, 0.001))
-
-        if cooking_active:
-            cooking_timer.start(maxf(paused_cooking_time, 0.001))
-
-        pause_button.text = "PAUSE"
-        status_text = "Game resumed! Keep cooking!"
-
-    refresh_ui()
-
-
-func _on_cooking_tick() -> void:
-    if game_paused:
-        return
-
-    if not cooking_active:
-        cooking_timer.stop()
-        return
-
-    cooking_seconds += 0.1
-    cooking_bar.value = cooking_seconds
-
-    var percentage := int((cooking_seconds / COOKING_TIME) * 100.0)
-    cooking_status_label.text = "COOKING: " + str(percentage) + "%"
-
-    if cooking_seconds >= COOKING_TIME:
-        cooking_timer.stop()
-        cooking_active = false
-        ingredients -= current_ingredients_required
-        cooked_meals += 1
-        cooking_bar.value = COOKING_TIME
-        cooking_status_label.text = "COOKING COMPLETE!"
-        status_text = "Delicious! Your meal is ready!"
-        refresh_ui()
-
-
-func _on_timer() -> void:
-    if not game_running or game_paused:
-        return
-
-    time_left -= 1
-    customer_patience -= 1
-
-    if patience_bar:
-        patience_bar.value = maxf(customer_patience, 0.0)
-
-    if customer_patience <= 0:
-        customers_lost += 1
-        current_combo = 0
-        customer_patience = round_customer_patience
-        status_text = "Customer left! Your combo was reset."
-
-    refresh_ui()
-
-    if time_left <= 0:
-        finish_game()
-
-
-func finish_game() -> void:
-    game_running = false
-    game_paused = false
-    game_timer.stop()
-    cooking_timer.stop()
-    cooking_active = false
-
-    if score > best_score:
-        best_score = score
-
-    if game_mode == "Career" and customers_served >= 5:
-        career_bonus_earned = CAREER_COMPLETION_BONUS
-        coins += career_bonus_earned
-        round_coins += career_bonus_earned
-        unlocked_level = mini(30, maxi(unlocked_level, level + 1))
-
-    save_progress()
-    status_text = "TIME UP! ROUND COMPLETE!"
-    show_results()
-
-
-func show_results() -> void:
-    screen = "results"
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_left", 45)
-    margin.add_theme_constant_override("margin_right", 45)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 14)
-    margin.add_child(layout)
-
-    var title := make_label("ROUND COMPLETE!", 42, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    var restaurant_label := make_label(restaurant.to_upper() + "  |  LEVEL " + str(level) + "  |  " + game_mode.to_upper(), 20, CREAM)
-    restaurant_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(restaurant_label)
-
-    var gap := Control.new()
-    gap.custom_minimum_size.y = 15
-    layout.add_child(gap)
-
-    add_result_line(layout, "FINAL SCORE", str(score))
-    add_result_line(layout, "COINS EARNED", "+" + str(round_coins))
-    add_result_line(layout, "TOTAL COINS", str(coins))
-    add_result_line(layout, "CUSTOMERS SERVED", str(customers_served))
-    add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
-    add_result_line(layout, "BEST SCORE", str(best_score))
-    add_result_line(layout, "BEST COMBO", str(best_combo))
-    add_result_line(layout, "COMBO BONUS COINS", "+" + str(combo_bonus_earned))
-
-    if career_bonus_earned > 0:
-        add_result_line(layout, "CAREER COMPLETION BONUS", "+" + str(career_bonus_earned))
-
-    var message := "Great work, Chef!"
-
-    if game_mode == "Career" and customers_served >= 5 and level < 30:
-        message = "Amazing! Level " + str(level + 1) + " unlocked! +50 BONUS COINS!"
-    elif game_mode == "Career" and customers_served >= 5 and level == 30:
-        message = "Congratulations! You completed all 30 Career Levels! +50 BONUS COINS!"
-    elif game_mode == "Career":
-        message = "Serve 5 customers to unlock the next level!"
-
-    var message_label := make_label(message, 21, GREEN)
-    message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(message_label)
-
-    var button_gap := Control.new()
-    button_gap.custom_minimum_size.y = 12
-    layout.add_child(button_gap)
-
-    add_menu_button(layout, "PLAY AGAIN", func(): start_game(game_mode), ORANGE)
-    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
-
-
-func add_result_line(parent: VBoxContainer, heading: String, value: String) -> void:
-    var line := HBoxContainer.new()
-    parent.add_child(line)
-
-    var left := make_label(heading, 20, CREAM)
-    left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    line.add_child(left)
-
-    var right := make_label(value, 20, ORANGE)
-    right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    line.add_child(right)
-
-
-func load_progress() -> void:
-    var config := ConfigFile.new()
-    var error := config.load(SAVE_PATH)
-
-    if error != OK:
-        coins = 0
-        best_score = 0
-        unlocked_level = 1
-        return
-
-    coins = int(config.get_value("progress", "coins", 0))
-    best_score = int(config.get_value("progress", "best_score", 0))
-    unlocked_level = int(config.get_value("progress", "unlocked_level", 1))
-    chef1_outfit_index = clampi(int(config.get_value("progress", "chef1_outfit", 0)), 0, 5)
-    chef2_outfit_index = clampi(int(config.get_value("progress", "chef2_outfit", 1)), 0, 5)
-
-
-func save_progress() -> void:
-    var config := ConfigFile.new()
-    config.set_value("progress", "coins", coins)
-    config.set_value("progress", "best_score", best_score)
-    config.set_value("progress", "unlocked_level", unlocked_level)
-    config.set_value("progress", "chef1_outfit", chef1_outfit_index)
-    config.set_value("progress", "chef2_outfit", chef2_outfit_index)
-    config.save(SAVE_PATH)
-
-
 func make_margin() -> MarginContainer:
     var margin := MarginContainer.new()
+    margin.add_theme_constant_override("margin_left", 22)
+    margin.add_theme_constant_override("margin_right", 22)
+    margin.add_theme_constant_override("margin_top", 18)
+    margin.add_theme_constant_override("margin_bottom", 18)
     margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    margin.add_theme_constant_override("margin_left", 65)
-    margin.add_theme_constant_override("margin_right", 65)
-    margin.add_theme_constant_override("margin_top", 25)
-    margin.add_theme_constant_override("margin_bottom", 25)
     return margin
 
-
-func make_label(value: String, font_size: int, color: Color) -> Label:
+func make_label(value: String, font_size: int = 20, color: Color = CREAM) -> Label:
     var label := Label.new()
     label.text = value
     label.add_theme_font_size_override("font_size", font_size)
     label.add_theme_color_override("font_color", color)
-    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     return label
 
-
-func make_button(value: String, callback: Callable, color: Color) -> Button:
+func make_button(value: String, callback: Callable, color: Color = ORANGE) -> Button:
     var button := Button.new()
     button.text = value
     button.custom_minimum_size = Vector2(0, 52)
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    button.add_theme_font_size_override("font_size", 19)
-    button.add_theme_color_override("font_color", Color("#ffffff"))
-
-    var normal := StyleBoxFlat.new()
-    normal.bg_color = color
-    normal.corner_radius_top_left = 14
-    normal.corner_radius_top_right = 14
-    normal.corner_radius_bottom_left = 14
-    normal.corner_radius_bottom_right = 14
-    normal.content_margin_left = 12
-    normal.content_margin_right = 12
-    normal.content_margin_top = 8
-    normal.content_margin_bottom = 8
-
-    button.add_theme_stylebox_override("normal", normal)
-
-    var hover := normal.duplicate()
-    hover.bg_color = color.lightened(0.13)
-    button.add_theme_stylebox_override("hover", hover)
-
-    var pressed_style := normal.duplicate()
-    pressed_style.bg_color = color.darkened(0.15)
-    button.add_theme_stylebox_override("pressed", pressed_style)
-
-    button.pressed.connect(callback)
-    return button
-
-
-func add_menu_button(parent: VBoxContainer, value: String, callback: Callable, color: Color) -> void:
-    var button := make_button(value, callback, color)
-    button.custom_minimum_size = Vector2(0, 55)
-    parent.add_child(button)
-
-
-func set_status(message: String) -> void:
-    status_text = message
-
-    if status_label:
-        status_label.text = message
-func generate_customer_order() -> void:
-    var order_number := randi_range(0, 2)
-
-    match order_number:
-        0:
-            current_order_name = "Classic Burger"
-            current_ingredients_required = 3
-        1:
-            current_order_name = "Cheese Burger"
-            current_ingredients_required = 4
-        2:
-            current_order_name = "Double Burger"
-            current_ingredients_required = 5
-
-
-func start_game(mode: String) -> void:
-    if is_network_game and not is_host and multiplayer.multiplayer_peer != null:
-        return
-
-    game_mode = mode
-    score = 0
-    round_coins = 0
-    career_bonus_earned = 0
-    combo_bonus_earned = 0
-    current_combo = 0
-    best_combo = 0
-    ingredients = 0
-    cooked_meals = 0
-    customers_served = 0
-    customers_lost = 0
-
-    generate_customer_order()
-
-    time_left = PRACTICE_TIME if mode == "Practice" else ROUND_TIME
-    cooking_seconds = 0.0
-    cooking_active = false
-    game_paused = false
-    paused_game_time = 0.0
-    paused_cooking_time = 0.0
-
-    round_customer_patience = CUSTOMER_PATIENCE + float(patience_upgrade * 2)
-
-    if mode == "Career":
-        round_customer_patience = maxf(
-            15.0,
-            round_customer_patience - float(level - 1) * 0.5
-        )
-
-    customer_patience = round_customer_patience
-
-    game_timer.stop()
-    cooking_timer.stop()
-
-    game_running = true
-    status_text = "Prepare ingredients, cook food, then serve!"
-    screen = "kitchen"
-
-    build_kitchen_ui()
-    game_timer.start()
-    queue_redraw()
-
-    if is_network_game and is_host:
-        rpc("remote_start_game", mode)
-
-
-@rpc("authority", "call_remote", "reliable")
-func remote_start_game(mode: String) -> void:
-    var previous_network_state := is_network_game
-    is_network_game = false
-    is_host = false
-    start_game(mode)
-    is_network_game = previous_network_state
-    is_host = false
-
-
-func build_kitchen_ui() -> void:
-    clear_screen()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_left", 20)
-    margin.add_theme_constant_override("margin_right", 20)
-    margin.add_theme_constant_override("margin_top", 12)
-    margin.add_theme_constant_override("margin_bottom", 12)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.add_theme_constant_override("separation", 7)
-    margin.add_child(layout)
-
-    var top := HBoxContainer.new()
-    layout.add_child(top)
-
-    var heading := make_label(restaurant.to_upper(), 20, CREAM)
-    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(heading)
-
-    score_label = make_label("SCORE: " + str(score), 16, CREAM)
-    top.add_child(score_label)
-
-    coins_label = make_label("COINS: " + str(coins), 16, CREAM)
-    top.add_child(coins_label)
-
-    timer_label = make_label("TIME: " + str(time_left), 16, CREAM)
-    top.add_child(timer_label)
-
-    pause_button = make_button("PAUSE", toggle_pause, ORANGE)
-    pause_button.custom_minimum_size = Vector2(85, 42)
-    top.add_child(pause_button)
-
-    order_label = make_label(
-        "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS",
-        18,
-        Color("#25384c")
-    )
-    order_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(order_label)
-
-    cooking_status_label = make_label("COOKING: WAITING", 16, CREAM)
-    cooking_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(cooking_status_label)
-
-    cooking_bar = ProgressBar.new()
-    cooking_bar.max_value = COOKING_TIME
-    cooking_bar.value = 0.0
-    cooking_bar.custom_minimum_size = Vector2(0, 16)
-    layout.add_child(cooking_bar)
-
-    layout.add_child(make_label("CUSTOMER PATIENCE", 14, CREAM))
-
-    patience_bar = ProgressBar.new()
-    patience_bar.max_value = round_customer_patience
-    patience_bar.value = round_customer_patience
-    patience_bar.custom_minimum_size = Vector2(0, 16)
-    layout.add_child(patience_bar)
-
-    var spacer := Control.new()
-    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    layout.add_child(spacer)
-
-    var stations := HBoxContainer.new()
-    stations.add_theme_constant_override("separation", 8)
-    layout.add_child(stations)
-
-    add_station(stations, "PREP", "CHOP INGREDIENTS", prepare_ingredients, GREEN)
-    add_station(stations, "COOK", "COOK MEAL", cook_meal, ORANGE)
-    add_station(stations, "SERVE", "SERVE CUSTOMER", serve_meal, Color("#6e9ed0"))
-
-    var stats := HBoxContainer.new()
-    stats.add_theme_constant_override("separation", 10)
-    layout.add_child(stats)
-
-    ingredient_label = make_label("INGREDIENTS: 0", 14, CREAM)
-    meal_label = make_label("READY: 0", 14, CREAM)
-    customers_label = make_label("SERVED: 0", 14, CREAM)
-    combo_label = make_label("COMBO: 0", 14, ORANGE)
-
-    stats.add_child(ingredient_label)
-    stats.add_child(meal_label)
-    stats.add_child(customers_label)
-    stats.add_child(combo_label)
-
-    status_label = make_label(status_text, 16, CREAM)
-    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(status_label)
-
-    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
-    refresh_ui()
-
-
-func add_station(parent: HBoxContainer, heading: String, action: String, callback: Callable, color: Color) -> void:
-    var column := VBoxContainer.new()
-    column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    parent.add_child(column)
-
-    var title := make_label(heading, 16, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    column.add_child(title)
-
-    var button := make_button(action, callback, color)
-    button.custom_minimum_size = Vector2(0, 85)
-    column.add_child(button)
-
-
-func prepare_ingredients() -> void:
-    if not game_running or game_paused:
-        return
-
-    if is_network_game and not is_host:
-        rpc_id(1, "request_player_action", "prepare")
-        return
-
-    host_prepare_ingredients()
-
-
-func cook_meal() -> void:
-    if not game_running or game_paused:
-        return
-
-    if is_network_game and not is_host:
-        rpc_id(1, "request_player_action", "cook")
-        return
-
-    host_cook_meal()
-
-
-func serve_meal() -> void:
-    if not game_running or game_paused:
-        return
-
-    if is_network_game and not is_host:
-        rpc_id(1, "request_player_action", "serve")
-        return
-
-    host_serve_meal()
-
-
-@rpc("any_peer", "call_remote", "reliable")
-func request_player_action(action: String) -> void:
-    if not is_host or not game_running or game_paused:
-        return
-
-    match action:
-        "prepare":
-            host_prepare_ingredients()
-        "cook":
-            host_cook_meal()
-        "serve":
-            host_serve_meal()
-
-
-func host_prepare_ingredients() -> void:
-    if ingredients >= current_ingredients_required:
-        status_text = "You have enough ingredients. Start cooking!"
-        refresh_ui()
-        broadcast_game_state()
-        return
-
-    ingredients += 1
-    status_text = "Ingredient prepared!"
-    refresh_ui()
-    broadcast_game_state()
-
-
-func host_cook_meal() -> void:
-    if cooking_active:
-        status_text = "Your food is already cooking!"
-        refresh_ui()
-        return
-
-    if cooked_meals >= 2:
-        status_text = "You already have two ready meals!"
-        refresh_ui()
-        return
-
-    if ingredients < current_ingredients_required:
-        status_text = "You need more ingredients before cooking!"
-        refresh_ui()
-        return
-
-    cooking_active = true
-    cooking_seconds = 0.0
-    cooking_bar.value = 0.0
-    cooking_status_label.text = "COOKING: 0%"
-    status_text = "Your meal is cooking!"
-    cooking_timer.start()
-    refresh_ui()
-    broadcast_game_state()
-
-
-func host_serve_meal() -> void:
-    if cooked_meals < 1:
-        status_text = "Cook a meal before serving!"
-        refresh_ui()
-        return
-
-    cooked_meals -= 1
-    score += 100
-
-    var serve_coins := 10 + coin_upgrade
-    coins += serve_coins
-    round_coins += serve_coins
-    customers_served += 1
-    total_customers_served += 1
-
-    current_combo += 1
-    best_combo = maxi(best_combo, current_combo)
-
-    var combo_message := ""
-
-    if current_combo == 3:
-        coins += COMBO_THREE_BONUS
-        round_coins += COMBO_THREE_BONUS
-        combo_bonus_earned += COMBO_THREE_BONUS
-        combo_message = "  3 CUSTOMER COMBO! +5 BONUS COINS!"
-    elif current_combo == 5:
-        coins += COMBO_FIVE_BONUS
-        round_coins += COMBO_FIVE_BONUS
-        combo_bonus_earned += COMBO_FIVE_BONUS
-        combo_message = "  5 CUSTOMER COMBO! +10 BONUS COINS!"
-    elif current_combo == 10:
-        coins += 25
-        round_coins += 25
-        combo_bonus_earned += 25
-        combo_message = "  10 CUSTOMER COMBO! +25 BONUS COINS!"
-
-    generate_customer_order()
-    customer_patience = round_customer_patience
-
-    status_text = "Customer served! +" + str(serve_coins) + " coins!" + combo_message
-
-    check_achievements()
-    save_progress()
-    refresh_ui()
-    broadcast_game_state()
-
-
-func _on_cooking_tick() -> void:
-    if not game_running or game_paused or not cooking_active:
-        cooking_timer.stop()
-        return
-
-    if is_network_game and not is_host:
-        return
-
-    cooking_seconds += 0.1
-
-    if cooking_bar:
-        cooking_bar.value = cooking_seconds
-
-    var percentage := int((cooking_seconds / COOKING_TIME) * 100.0)
-
-    if cooking_status_label:
-        cooking_status_label.text = "COOKING: " + str(percentage) + "%"
-
-    if cooking_seconds >= COOKING_TIME:
-        cooking_timer.stop()
-        cooking_active = false
-        ingredients -= current_ingredients_required
-        cooked_meals += 1
-
-        if cooking_bar:
-            cooking_bar.value = COOKING_TIME
-
-        if cooking_status_label:
-            cooking_status_label.text = "COOKING COMPLETE!"
-
-        status_text = "Delicious! Your meal is ready!"
-        refresh_ui()
-        broadcast_game_state()
-
-
-func _on_timer() -> void:
-    if not game_running or game_paused:
-        return
-
-    if is_network_game and not is_host:
-        return
-
-    time_left -= 1
-
-    if game_mode != "Practice":
-        customer_patience -= 1
-
-        if customer_patience <= 0:
-            customers_lost += 1
-            current_combo = 0
-            customer_patience = round_customer_patience
-            status_text = "Customer left! Your combo was reset."
-
-    refresh_ui()
-    broadcast_game_state()
-
-    if time_left <= 0:
-        finish_game()
-
-
-func toggle_pause() -> void:
-    if not game_running:
-        return
-
-    if is_network_game and not is_host:
-        status_text = "Only the host can pause the shared game."
-        refresh_ui()
-        return
-
-    if not game_paused:
-        paused_game_time = game_timer.time_left
-        if cooking_active:
-            paused_cooking_time = cooking_timer.time_left
-
-        game_timer.stop()
-        cooking_timer.stop()
-        game_paused = true
-        pause_button.text = "RESUME"
-        status_text = "GAME PAUSED."
-    else:
-        game_paused = false
-        game_timer.start(maxf(paused_game_time, 0.001))
-
-        if cooking_active:
-            cooking_timer.start(maxf(paused_cooking_time, 0.001))
-
-        pause_button.text = "PAUSE"
-        status_text = "Game resumed! Keep cooking!"
-
-    refresh_ui()
-    broadcast_game_state()
-
-
-func refresh_ui() -> void:
-    if score_label:
-        score_label.text = "SCORE: " + str(score)
-
-    if coins_label:
-        coins_label.text = "COINS: " + str(coins)
-
-    if timer_label:
-        timer_label.text = "TIME: " + str(time_left)
-
-    if ingredient_label:
-        ingredient_label.text = "INGREDIENTS: " + str(ingredients) + " / " + str(current_ingredients_required)
-
-    if meal_label:
-        meal_label.text = "READY: " + str(cooked_meals)
-
-    if customers_label:
-        customers_label.text = "SERVED: " + str(customers_served)
-
-    if combo_label:
-        combo_label.text = "COMBO: " + str(current_combo)
-
-    if order_label:
-        order_label.text = "ORDER: " + current_order_name + "  |  " + str(current_ingredients_required) + " INGREDIENTS"
-
-    if patience_bar:
-        patience_bar.max_value = round_customer_patience
-        patience_bar.value = maxf(customer_patience, 0.0)
-
-    if status_label:
-        status_label.text = status_text
-
-
-func broadcast_game_state() -> void:
-    if not is_network_game or not is_host:
-        return
-
-    rpc(
-        "receive_game_state",
-        score,
-        coins,
-        round_coins,
-        ingredients,
-        cooked_meals,
-        current_order_name,
-        current_ingredients_required,
-        customers_served,
-        customers_lost,
-        time_left,
-        customer_patience,
-        current_combo,
-        best_combo,
-        cooking_active,
-        cooking_seconds,
-        status_text
-    )
-
-
-@rpc("authority", "call_remote", "reliable")
-func receive_game_state(
-    new_score: int,
-    new_coins: int,
-    new_round_coins: int,
-    new_ingredients: int,
-    new_cooked_meals: int,
-    new_order_name: String,
-    new_required: int,
-    new_served: int,
-    new_lost: int,
-    new_time: int,
-    new_patience: float,
-    new_combo: int,
-    new_best_combo: int,
-    new_cooking_active: bool,
-    new_cooking_seconds: float,
-    new_status: String
-) -> void:
-    score = new_score
-    coins = new_coins
-    round_coins = new_round_coins
-    ingredients = new_ingredients
-    cooked_meals = new_cooked_meals
-    current_order_name = new_order_name
-    current_ingredients_required = new_required
-    customers_served = new_served
-    customers_lost = new_lost
-    time_left = new_time
-    customer_patience = new_patience
-    current_combo = new_combo
-    best_combo = new_best_combo
-    cooking_active = new_cooking_active
-    cooking_seconds = new_cooking_seconds
-    status_text = new_status
-
-    if screen == "kitchen":
-        refresh_ui()
-        if cooking_bar:
-            cooking_bar.value = cooking_seconds
-        if cooking_status_label and cooking_active:
-            cooking_status_label.text = "COOKING: " + str(int(cooking_seconds / COOKING_TIME * 100.0)) + "%"
-
-func check_achievements() -> void:
-    unlock_achievement("First Customer", total_customers_served >= 1)
-    unlock_achievement("Getting Busy", total_customers_served >= 10)
-    unlock_achievement("Restaurant Star", total_customers_served >= 50)
-    unlock_achievement("Combo Chef", best_combo >= 5)
-    unlock_achievement("Combo Master", best_combo >= 10)
-    unlock_achievement("Career Beginner", unlocked_level >= 10)
-    unlock_achievement("Career Expert", unlocked_level >= 20)
-    unlock_achievement("Career Champion", unlocked_level >= 30)
-    unlock_achievement("Dedicated Chef", total_rounds_played >= 10)
-
-
-func unlock_achievement(achievement_name: String, condition: bool) -> void:
-    if condition and not achievements.has(achievement_name):
-        achievements.append(achievement_name)
-        status_text += "  Achievement unlocked: " + achievement_name + "!"
-        save_progress()
-
-
-func finish_game() -> void:
-    if is_network_game and not is_host:
-        return
-
-    game_running = false
-    game_paused = false
-    game_timer.stop()
-    cooking_timer.stop()
-    cooking_active = false
-
-    total_rounds_played += 1
-
-    if score > best_score:
-        best_score = score
-
-    if game_mode == "Career" and customers_served >= 5:
-        career_bonus_earned = CAREER_BONUS
-        coins += career_bonus_earned
-        round_coins += career_bonus_earned
-        unlocked_level = mini(30, maxi(unlocked_level, level + 1))
-
-    check_achievements()
-    save_progress()
-
-    status_text = "TIME UP! ROUND COMPLETE!"
-    show_results()
-
-    if is_network_game and is_host:
-        rpc("remote_finish_game")
-
-
-@rpc("authority", "call_remote", "reliable")
-func remote_finish_game() -> void:
-    var was_network_game := is_network_game
-    is_network_game = false
-    finish_game()
-    is_network_game = was_network_game
-
-
-func show_results() -> void:
-    screen = "results"
-    clear_screen()
-    queue_redraw()
-
-    var margin := make_margin()
-    margin.add_theme_constant_override("margin_left", 35)
-    margin.add_theme_constant_override("margin_right", 35)
-    add_child(margin)
-
-    var layout := VBoxContainer.new()
-    layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 10)
-    margin.add_child(layout)
-
-    var title := make_label("ROUND COMPLETE!", 34, CREAM)
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(title)
-
-    var mode_label := make_label(
-        restaurant.to_upper() + "  |  LEVEL " + str(level) + "  |  " + game_mode.to_upper(),
-        16,
-        CREAM
-    )
-    mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(mode_label)
-
-    add_result_line(layout, "FINAL SCORE", str(score))
-    add_result_line(layout, "COINS EARNED", "+" + str(round_coins))
-    add_result_line(layout, "TOTAL COINS", str(coins))
-    add_result_line(layout, "CUSTOMERS SERVED", str(customers_served))
-    add_result_line(layout, "CUSTOMERS LOST", str(customers_lost))
-    add_result_line(layout, "BEST SCORE", str(best_score))
-    add_result_line(layout, "BEST COMBO", str(best_combo))
-    add_result_line(layout, "COMBO BONUS COINS", "+" + str(combo_bonus_earned))
-
-    if career_bonus_earned > 0:
-        add_result_line(layout, "CAREER COMPLETION BONUS", "+" + str(career_bonus_earned))
-
-    var message := "Great work, Chef!"
-
-    if game_mode == "Career" and customers_served >= 5 and level < 30:
-        message = "Amazing! Level " + str(level + 1) + " unlocked!"
-    elif game_mode == "Career" and customers_served >= 5 and level == 30:
-        message = "Congratulations! You completed all 30 Career Levels!"
-    elif game_mode == "Career":
-        message = "Serve 5 customers to unlock the next level!"
-
-    var message_label := make_label(message, 18, GREEN)
-    message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    layout.add_child(message_label)
-
-    add_menu_button(layout, "PLAY AGAIN", func(): start_game(game_mode), ORANGE)
-    add_menu_button(layout, "MAIN MENU", show_menu, PANEL)
-
-
-func add_result_line(parent: VBoxContainer, heading: String, value: String) -> void:
-    var line := HBoxContainer.new()
-    parent.add_child(line)
-
-    var left := make_label(heading, 17, CREAM)
-    left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    line.add_child(left)
-
-    var right := make_label(value, 17, ORANGE)
-    right.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    line.add_child(right)
-
-
-func load_progress() -> void:
-    var config := ConfigFile.new()
-    var error := config.load(SAVE_PATH)
-
-    if error != OK:
-        return
-
-    coins = int(config.get_value("progress", "coins", 0))
-    best_score = int(config.get_value("progress", "best_score", 0))
-    unlocked_level = int(config.get_value("progress", "unlocked_level", 1))
-    chef1_outfit_index = clampi(int(config.get_value("progress", "chef1_outfit", 0)), 0, 5)
-    chef2_outfit_index = clampi(int(config.get_value("progress", "chef2_outfit", 1)), 0, 5)
-    selected_language = str(config.get_value("progress", "language", "English"))
-
-    patience_upgrade = clampi(int(config.get_value("progress", "patience_upgrade", 0)), 0, 5)
-    coin_upgrade = clampi(int(config.get_value("progress", "coin_upgrade", 0)), 0, 5)
-    total_customers_served = int(config.get_value("progress", "total_customers_served", 0))
-    total_rounds_played = int(config.get_value("progress", "total_rounds_played", 0))
-    last_daily_reward = str(config.get_value("progress", "last_daily_reward", ""))
-
-    var saved_achievements: Variant = config.get_value("progress", "achievements", [])
-    achievements.clear()
-
-    if saved_achievements is Array:
-        for item in saved_achievements:
-            achievements.append(str(item))
-
-    unlocked_level = clampi(unlocked_level, 1, 30)
-
-
-func save_progress() -> void:
-    var config := ConfigFile.new()
-
-    config.set_value("progress", "coins", coins)
-    config.set_value("progress", "best_score", best_score)
-    config.set_value("progress", "unlocked_level", unlocked_level)
-    config.set_value("progress", "chef1_outfit", chef1_outfit_index)
-    config.set_value("progress", "chef2_outfit", chef2_outfit_index)
-    config.set_value("progress", "language", selected_language)
-
-    config.set_value("progress", "patience_upgrade", patience_upgrade)
-    config.set_value("progress", "coin_upgrade", coin_upgrade)
-    config.set_value("progress", "total_customers_served", total_customers_served)
-    config.set_value("progress", "total_rounds_played", total_rounds_played)
-    config.set_value("progress", "last_daily_reward", last_daily_reward)
-    config.set_value("progress", "achievements", achievements)
-
-    config.save(SAVE_PATH)
-
-
-func make_margin() -> MarginContainer:
-    var margin := MarginContainer.new()
-    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    margin.add_theme_constant_override("margin_left", 45)
-    margin.add_theme_constant_override("margin_right", 45)
-    margin.add_theme_constant_override("margin_top", 20)
-    margin.add_theme_constant_override("margin_bottom", 20)
-    return margin
-
-
-func make_label(value: String, font_size: int, color: Color) -> Label:
-    var label := Label.new()
-    label.text = value
-    label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", color)
-    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    return label
-
-
-func make_button(value: String, callback: Callable, color: Color) -> Button:
-    var button := Button.new()
-    button.text = value
-    button.custom_minimum_size = Vector2(0, 48)
-    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    button.add_theme_font_size_override("font_size", 17)
-    button.add_theme_color_override("font_color", Color("#ffffff"))
-
+    button.add_theme_font_size_override("font_size", 18)
     var normal := StyleBoxFlat.new()
     normal.bg_color = color
     normal.corner_radius_top_left = 12
@@ -1623,31 +156,607 @@ func make_button(value: String, callback: Callable, color: Color) -> Button:
     normal.corner_radius_bottom_right = 12
     normal.content_margin_left = 10
     normal.content_margin_right = 10
-    normal.content_margin_top = 7
-    normal.content_margin_bottom = 7
-
     button.add_theme_stylebox_override("normal", normal)
-
     var hover := normal.duplicate()
-    hover.bg_color = color.lightened(0.13)
+    hover.bg_color = color.lightened(0.12)
     button.add_theme_stylebox_override("hover", hover)
-
-    var pressed_style := normal.duplicate()
-    pressed_style.bg_color = color.darkened(0.15)
-    button.add_theme_stylebox_override("pressed", pressed_style)
-
     button.pressed.connect(callback)
     return button
 
-
-func add_menu_button(parent: VBoxContainer, value: String, callback: Callable, color: Color) -> void:
+func add_button(parent: VBoxContainer, value: String, callback: Callable, color: Color = ORANGE) -> Button:
     var button := make_button(value, callback, color)
-    button.custom_minimum_size = Vector2(0, 50)
     parent.add_child(button)
+    return button
 
+func make_layout(title_text: String, title_size: int = 32) -> VBoxContainer:
+    clear_screen()
+    var margin := make_margin()
+    add_child(margin)
+    var layout := VBoxContainer.new()
+    layout.alignment = BoxContainer.ALIGNMENT_CENTER
+    layout.add_theme_constant_override("separation", 10)
+    margin.add_child(layout)
+    var title := make_label(title_text, title_size)
+    layout.add_child(title)
+    return layout
+
+func show_menu() -> void:
+    game_timer.stop()
+    cooking_timer.stop()
+    game_running = false
+    game_paused = false
+    is_network_game = false
+    is_host = false
+    screen = "menu"
+    queue_redraw()
+    var layout := make_layout("COUPLE CHEF", 42)
+    layout.add_child(make_label("COOK TOGETHER. SERVE WITH LOVE.", 16))
+    layout.add_child(make_label("COINS: %d     BEST SCORE: %d" % [coins, best_score], 17, GREEN))
+    add_button(layout, "CAREER MODE", show_restaurants)
+    add_button(layout, "LOCAL CO-OP", func(): start_game("Co-op"), GREEN)
+    add_button(layout, "VERSUS MODE", func(): start_game("Versus"), Color("#8d83d8"))
+    add_button(layout, "PRACTICE MODE", func(): start_game("Practice"), Color("#559bb9"))
+    add_button(layout, "ONLINE / LAN MULTIPLAYER", show_multiplayer, GREEN)
+    add_button(layout, "UPGRADES SHOP", show_shop, PANEL)
+    add_button(layout, "ACHIEVEMENTS", show_achievements, PANEL)
+    add_button(layout, "DAILY REWARD", claim_daily_reward, ORANGE)
+    add_button(layout, "SETTINGS", show_settings, PANEL)
+
+func show_restaurants() -> void:
+    screen = "restaurants"
+    var layout := make_layout("CHOOSE RESTAURANT")
+    layout.add_child(make_label("Highest unlocked level: %d" % unlocked_level, 17, GREEN))
+    add_button(layout, "BURGER RESTAURANT - LEVELS 1-10", func(): show_levels("Burger Restaurant", 1, 10))
+    var cafe := make_button("CAFE & BAKERY - LEVELS 11-20", func(): show_levels("Cafe & Bakery", 11, 20), Color("#b982c9"))
+    cafe.disabled = unlocked_level < 11
+    layout.add_child(cafe)
+    var steak := make_button("STEAKHOUSE - LEVELS 21-30", func(): show_levels("Steakhouse", 21, 30), RED)
+    steak.disabled = unlocked_level < 21
+    layout.add_child(steak)
+    add_button(layout, "BACK", show_menu, PANEL)
+
+func show_levels(restaurant_name: String, first_level: int, last_level: int) -> void:
+    screen = "levels"
+    restaurant = restaurant_name
+    var layout := make_layout(restaurant_name.to_upper())
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    layout.add_child(scroll)
+    var list := VBoxContainer.new()
+    list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(list)
+    for n in range(first_level, last_level + 1):
+        var selected := n
+        var b := make_button("LEVEL %d%s" % [selected, " - LOCKED" if selected > unlocked_level else " - PLAY"], func(): start_career_level(selected))
+        b.disabled = selected > unlocked_level
+        list.add_child(b)
+    add_button(layout, "BACK", show_restaurants, PANEL)
+
+func start_career_level(selected_level: int) -> void:
+    if selected_level > unlocked_level:
+        return
+    level = selected_level
+    start_game("Career")
+
+func show_settings() -> void:
+    screen = "settings"
+    var layout := make_layout("SETTINGS")
+    add_button(layout, "CHEF 1 OUTFIT: " + OUTFIT_NAMES[chef1_outfit_index], func():
+        chef1_outfit_index = (chef1_outfit_index + 1) % OUTFIT_COLORS.size()
+        show_settings())
+    add_button(layout, "CHEF 2 OUTFIT: " + OUTFIT_NAMES[chef2_outfit_index], func():
+        chef2_outfit_index = (chef2_outfit_index + 1) % OUTFIT_COLORS.size()
+        show_settings(), Color("#559bb9"))
+    add_button(layout, "LANGUAGE: " + selected_language, func():
+        selected_language = "Filipino" if selected_language == "English" else "English"
+        show_settings(), PANEL)
+    add_button(layout, "BACK", show_menu, PANEL)
+    save_progress()
+
+func show_shop() -> void:
+    screen = "shop"
+    var layout := make_layout("UPGRADES SHOP")
+    layout.add_child(make_label("Coins: %d" % coins, 18, GREEN))
+    layout.add_child(make_label("Customer patience upgrade: level %d" % patience_upgrade, 16))
+    var cost := 50 + patience_upgrade * 50
+    var buy := make_button("BUY +2 SECONDS PATIENCE - %d COINS" % cost, func():
+        if coins >= cost:
+            coins -= cost
+            patience_upgrade += 1
+            save_progress()
+            show_shop()
+        else:
+            set_status("Not enough coins.")
+    )
+    buy.disabled = coins < cost
+    layout.add_child(buy)
+    add_button(layout, "BACK", show_menu, PANEL)
+
+func show_achievements() -> void:
+    screen = "achievements"
+    var layout := make_layout("ACHIEVEMENTS")
+    var names := ["First Service", "Combo Master", "Five-Star Chef", "Career Expert", "Dedicated Chef"]
+    for achievement in names:
+        var mark := "✓ " if achievements.has(achievement) else "○ "
+        layout.add_child(make_label(mark + achievement, 18, GREEN if achievements.has(achievement) else CREAM))
+    add_button(layout, "BACK", show_menu, PANEL)
+
+func claim_daily_reward() -> void:
+    var today := Time.get_date_string_from_system()
+    if last_daily_reward == today:
+        status_text = "Daily reward already claimed today."
+    else:
+        coins += 25
+        last_daily_reward = today
+        status_text = "Daily reward claimed: +25 coins!"
+        save_progress()
+    show_menu()
+
+func show_multiplayer() -> void:
+    screen = "multiplayer"
+    var layout := make_layout("ONLINE / LAN CO-OP")
+    layout.add_child(make_label("Both players must use the same Wi-Fi network.", 15))
+    ip_input = LineEdit.new()
+    ip_input.placeholder_text = "Host IP address (example: 192.168.1.10)"
+    ip_input.text = host_ip
+    layout.add_child(ip_input)
+    lobby_status_label = make_label(network_status, 16, GREEN)
+    layout.add_child(lobby_status_label)
+    add_button(layout, "HOST GAME", host_lan_game, GREEN)
+    add_button(layout, "JOIN GAME", join_lan_game, Color("#559bb9"))
+    add_button(layout, "START CO-OP MATCH (HOST)", start_host_match, ORANGE)
+    add_button(layout, "DISCONNECT", disconnect_network, RED)
+    add_button(layout, "BACK", show_menu, PANEL)
+
+func update_lobby(message: String) -> void:
+    network_status = message
+    if is_instance_valid(lobby_status_label):
+        lobby_status_label.text = message
+
+func host_lan_game() -> void:
+    disconnect_network()
+    var peer := ENetMultiplayerPeer.new()
+    var result := peer.create_server(PORT, MAX_CLIENTS)
+    if result != OK:
+        update_lobby("Could not host. Error: %s" % error_string(result))
+        return
+    multiplayer.multiplayer_peer = peer
+    is_network_game = true
+    is_host = true
+    update_lobby("Hosting. Give your partner your local IP address and wait for them to join.")
+
+func join_lan_game() -> void:
+    host_ip = ip_input.text.strip_edges() if is_instance_valid(ip_input) else host_ip
+    if host_ip.is_empty():
+        update_lobby("Enter the host's local IP address.")
+        return
+    disconnect_network()
+    var peer := ENetMultiplayerPeer.new()
+    var result := peer.create_client(host_ip, PORT)
+    if result != OK:
+        update_lobby("Could not connect: %s" % error_string(result))
+        return
+    multiplayer.multiplayer_peer = peer
+    is_network_game = true
+    is_host = false
+    update_lobby("Connecting to host...")
+
+func start_host_match() -> void:
+    if not is_network_game or not is_host:
+        update_lobby("Only the host can start the online match.")
+        return
+    start_game("Co-op")
+
+func disconnect_network() -> void:
+    if multiplayer.multiplayer_peer != null:
+        multiplayer.multiplayer_peer.close()
+        multiplayer.multiplayer_peer = null
+    is_network_game = false
+    is_host = false
+    network_status = "Not connected"
+
+func _on_peer_connected(peer_id: int) -> void:
+    if is_host:
+        update_lobby("Player connected. Host can start the match.")
+
+func _on_peer_disconnected(peer_id: int) -> void:
+    update_lobby("Other player disconnected.")
+
+func _on_connected_to_server() -> void:
+    update_lobby("Connected! Waiting for the host to start.")
+
+func _on_connection_failed() -> void:
+    disconnect_network()
+    update_lobby("Connection failed. Check Wi-Fi and host IP.")
+
+func _on_server_disconnected() -> void:
+    disconnect_network()
+    if screen == "kitchen":
+        show_menu()
+    else:
+        update_lobby("Host disconnected.")
+
+func generate_customer_order() -> void:
+    var choice := randi_range(0, 2)
+    if choice == 0:
+        current_order_name = "Classic Burger"
+        current_ingredients_required = 3
+    elif choice == 1:
+        current_order_name = "Cheese Burger"
+        current_ingredients_required = 4
+    else:
+        current_order_name = "Double Burger"
+        current_ingredients_required = 5
+
+func start_game(mode: String) -> void:
+    if is_network_game and not is_host:
+        return
+    game_mode = mode
+    score = 0
+    round_coins = 0
+    career_bonus_earned = 0
+    current_combo = 0
+    best_combo = 0
+    ingredients = 0
+    cooked_meals = 0
+    customers_served = 0
+    customers_lost = 0
+    generate_customer_order()
+    time_left = PRACTICE_TIME if mode == "Practice" else ROUND_TIME
+    customer_patience = CUSTOMER_PATIENCE + float(patience_upgrade * 2)
+    if mode == "Career":
+        customer_patience = maxf(15.0, customer_patience - float(level - 1) * 0.5)
+    cooking_seconds = 0.0
+    cooking_active = false
+    game_paused = false
+    game_running = true
+    screen = "kitchen"
+    build_kitchen_ui()
+    game_timer.start()
+    if is_network_game and is_host:
+        rpc("remote_start_game", mode)
+        broadcast_game_state()
+
+@rpc("authority", "call_remote", "reliable")
+func remote_start_game(mode: String) -> void:
+    var was_network := is_network_game
+    is_network_game = false
+    is_host = false
+    start_game(mode)
+    is_network_game = was_network
+    is_host = false
+
+func build_kitchen_ui() -> void:
+    screen = "kitchen"
+    clear_screen()
+    queue_redraw()
+    var margin := make_margin()
+    add_child(margin)
+    var layout := VBoxContainer.new()
+    layout.add_theme_constant_override("separation", 6)
+    margin.add_child(layout)
+    var heading := make_label("COUPLE CHEF - " + game_mode.to_upper(), 23)
+    layout.add_child(heading)
+    score_label = make_label("", 17, GREEN)
+    coins_label = make_label("", 16)
+    timer_label = make_label("", 18, ORANGE)
+    order_label = make_label("", 18)
+    ingredient_label = make_label("", 16)
+    meal_label = make_label("", 16)
+    customers_label = make_label("", 16)
+    combo_label = make_label("", 16)
+    for label in [score_label, coins_label, timer_label, order_label, ingredient_label, meal_label, customers_label, combo_label]:
+        layout.add_child(label)
+    patience_bar = ProgressBar.new()
+    patience_bar.max_value = CUSTOMER_PATIENCE + float(patience_upgrade * 2)
+    layout.add_child(patience_bar)
+    cooking_bar = ProgressBar.new()
+    cooking_bar.max_value = 4.0
+    layout.add_child(cooking_bar)
+    var stations := HBoxContainer.new()
+    stations.add_theme_constant_override("separation", 6)
+    layout.add_child(stations)
+    var prepare := make_button("PREPARE", prepare_ingredients, GREEN)
+    stations.add_child(prepare)
+    var cook := make_button("COOK", cook_meal, ORANGE)
+    stations.add_child(cook)
+    var serve := make_button("SERVE", serve_meal, Color("#559bb9"))
+    stations.add_child(serve)
+    status_label = make_label(status_text, 15)
+    layout.add_child(status_label)
+    var pause := make_button("PAUSE / RESUME", toggle_pause, PANEL)
+    layout.add_child(pause)
+    add_button(layout, "MAIN MENU", show_menu, RED)
+    refresh_ui()
+
+func prepare_ingredients() -> void:
+    if not game_running or game_paused:
+        return
+    if is_network_game and not is_host:
+        rpc_id(1, "request_player_action", "prepare")
+        return
+    ingredients = mini(ingredients + 1, current_ingredients_required)
+    status_text = "Ingredients: %d / %d" % [ingredients, current_ingredients_required]
+    refresh_ui()
+    broadcast_game_state()
+
+func cook_meal() -> void:
+    if not game_running or game_paused or cooking_active:
+        return
+    if is_network_game and not is_host:
+        rpc_id(1, "request_player_action", "cook")
+        return
+    if ingredients < current_ingredients_required:
+        status_text = "Prepare all ingredients first!"
+        refresh_ui()
+        return
+    if cooked_meals >= 1:
+        status_text = "Meal is already ready. Serve it!"
+        refresh_ui()
+        return
+    cooking_active = true
+    cooking_seconds = 0.0
+    cooking_timer.start()
+    status_text = "Cooking..."
+    refresh_ui()
+    broadcast_game_state()
+
+func serve_meal() -> void:
+    if not game_running or game_paused:
+        return
+    if is_network_game and not is_host:
+        rpc_id(1, "request_player_action", "serve")
+        return
+    if cooked_meals < 1:
+        status_text = "Cook the meal before serving!"
+        refresh_ui()
+        return
+    score += 10
+    coins += 5
+    round_coins += 5
+    customers_served += 1
+    current_combo += 1
+    best_combo = maxi(best_combo, current_combo)
+    if current_combo == 3:
+        coins += 5
+        round_coins += 5
+    if current_combo == 5:
+        coins += 10
+        round_coins += 10
+    ingredients = 0
+    cooked_meals = 0
+    customer_patience = CUSTOMER_PATIENCE + float(patience_upgrade * 2)
+    generate_customer_order()
+    status_text = "Order served! Great teamwork!"
+    check_achievements()
+    refresh_ui()
+    broadcast_game_state()
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_player_action(action: String) -> void:
+    if not is_host or not game_running or game_paused:
+        return
+    match action:
+        "prepare":
+            prepare_ingredients()
+        "cook":
+            cook_meal()
+        "serve":
+            serve_meal()
+
+func _on_cooking_tick() -> void:
+    if not game_running or game_paused:
+        return
+    if is_network_game and not is_host:
+        return
+    if not cooking_active:
+        cooking_timer.stop()
+        return
+    cooking_seconds += 0.1
+    if cooking_seconds >= 4.0:
+        cooking_active = false
+        cooking_timer.stop()
+        cooked_meals = 1
+        status_text = "Meal ready! Serve it!"
+    refresh_ui()
+    broadcast_game_state()
+
+func _on_game_tick() -> void:
+    if not game_running or game_paused:
+        return
+    if is_network_game and not is_host:
+        return
+    time_left -= 1
+    customer_patience -= 1.0
+    if customer_patience <= 0.0:
+        customers_lost += 1
+        current_combo = 0
+        ingredients = 0
+        cooked_meals = 0
+        cooking_active = false
+        cooking_timer.stop()
+        generate_customer_order()
+        customer_patience = CUSTOMER_PATIENCE + float(patience_upgrade * 2)
+        status_text = "Customer left. Next order!"
+    if time_left <= 0:
+        finish_game()
+    else:
+        refresh_ui()
+        broadcast_game_state()
+
+func toggle_pause() -> void:
+    if not game_running:
+        return
+    if is_network_game and not is_host:
+        rpc_id(1, "request_pause")
+        return
+    game_paused = not game_paused
+    if game_paused:
+        game_timer.stop()
+        cooking_timer.stop()
+        status_text = "Game paused."
+    else:
+        game_timer.start()
+        if cooking_active:
+            cooking_timer.start()
+        status_text = "Game resumed."
+    refresh_ui()
+    broadcast_game_state()
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_pause() -> void:
+    if is_host:
+        toggle_pause()
+
+func refresh_ui() -> void:
+    if is_instance_valid(score_label):
+        score_label.text = "SCORE: %d" % score
+        coins_label.text = "COINS: %d (+%d THIS ROUND)" % [coins, round_coins]
+        timer_label.text = "TIME: %d" % time_left
+        order_label.text = "ORDER: %s - %d ingredients" % [current_order_name, current_ingredients_required]
+        ingredient_label.text = "INGREDIENTS: %d / %d" % [ingredients, current_ingredients_required]
+        meal_label.text = "READY MEALS: %d" % cooked_meals
+        customers_label.text = "SERVED: %d    LOST: %d" % [customers_served, customers_lost]
+        combo_label.text = "COMBO: %d    BEST: %d" % [current_combo, best_combo]
+        patience_bar.value = maxf(customer_patience, 0.0)
+        cooking_bar.value = cooking_seconds
+        status_label.text = status_text
+
+func broadcast_game_state() -> void:
+    if not is_network_game or not is_host:
+        return
+    rpc("receive_game_state", score, coins, round_coins, ingredients, cooked_meals,
+        current_order_name, current_ingredients_required, customers_served, customers_lost,
+        time_left, customer_patience, current_combo, best_combo, cooking_active,
+        cooking_seconds, status_text, game_paused)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_game_state(new_score: int, new_coins: int, new_round_coins: int,
+        new_ingredients: int, new_meals: int, new_order: String, new_required: int,
+        new_served: int, new_lost: int, new_time: int, new_patience: float,
+        new_combo: int, new_best_combo: int, new_cooking: bool,
+        new_cooking_seconds: float, new_status: String, new_paused: bool) -> void:
+    score = new_score
+    coins = new_coins
+    round_coins = new_round_coins
+    ingredients = new_ingredients
+    cooked_meals = new_meals
+    current_order_name = new_order
+    current_ingredients_required = new_required
+    customers_served = new_served
+    customers_lost = new_lost
+    time_left = new_time
+    customer_patience = new_patience
+    current_combo = new_combo
+    best_combo = new_best_combo
+    cooking_active = new_cooking
+    cooking_seconds = new_cooking_seconds
+    status_text = new_status
+    game_paused = new_paused
+    if game_paused:
+        game_timer.stop()
+        cooking_timer.stop()
+    else:
+        if game_running and not game_timer.time_left > 0.0:
+            game_timer.start()
+        if cooking_active and not cooking_timer.time_left > 0.0:
+            cooking_timer.start()
+        elif not cooking_active:
+            cooking_timer.stop()
+    refresh_ui()
+
+func check_achievements() -> void:
+    if customers_served >= 1 and not achievements.has("First Service"):
+        achievements.append("First Service")
+    if best_combo >= 5 and not achievements.has("Combo Master"):
+        achievements.append("Combo Master")
+    if score >= 100 and not achievements.has("Five-Star Chef"):
+        achievements.append("Five-Star Chef")
+    if unlocked_level >= 20 and not achievements.has("Career Expert"):
+        achievements.append("Career Expert")
+    if total_rounds_played >= 10 and not achievements.has("Dedicated Chef"):
+        achievements.append("Dedicated Chef")
+
+func finish_game() -> void:
+    if is_network_game and not is_host:
+        return
+    game_running = false
+    game_paused = false
+    game_timer.stop()
+    cooking_timer.stop()
+    cooking_active = false
+    total_rounds_played += 1
+    best_score = maxi(best_score, score)
+    if game_mode == "Career" and customers_served >= 5:
+        career_bonus_earned = 50
+        coins += career_bonus_earned
+        round_coins += career_bonus_earned
+        unlocked_level = mini(30, maxi(unlocked_level, level + 1))
+    check_achievements()
+    save_progress()
+    status_text = "ROUND COMPLETE!"
+    show_results()
+    if is_network_game and is_host:
+        rpc("remote_finish_game", score, coins, round_coins, customers_served, customers_lost)
+
+@rpc("authority", "call_remote", "reliable")
+func remote_finish_game(final_score: int, final_coins: int, final_round_coins: int,
+        served: int, lost: int) -> void:
+    score = final_score
+    coins = final_coins
+    round_coins = final_round_coins
+    customers_served = served
+    customers_lost = lost
+    game_running = false
+    game_timer.stop()
+    cooking_timer.stop()
+    show_results()
+
+func show_results() -> void:
+    screen = "results"
+    queue_redraw()
+    var layout := make_layout("ROUND COMPLETE!", 34)
+    layout.add_child(make_label("SCORE: %d" % score, 26, GREEN))
+    layout.add_child(make_label("CUSTOMERS SERVED: %d" % customers_served, 19))
+    layout.add_child(make_label("CUSTOMERS LOST: %d" % customers_lost, 19))
+    layout.add_child(make_label("COINS EARNED: %d" % round_coins, 19, ORANGE))
+    layout.add_child(make_label("BEST COMBO: %d" % best_combo, 19))
+    add_button(layout, "PLAY AGAIN", func(): start_game(game_mode), GREEN)
+    add_button(layout, "MAIN MENU", show_menu, PANEL)
 
 func set_status(message: String) -> void:
     status_text = message
-
-    if status_label:
+    if is_instance_valid(status_label):
         status_label.text = message
+
+func load_progress() -> void:
+    var config := ConfigFile.new()
+    if config.load(SAVE_PATH) != OK:
+        return
+    coins = int(config.get_value("progress", "coins", 0))
+    best_score = int(config.get_value("progress", "best_score", 0))
+    unlocked_level = int(config.get_value("progress", "unlocked_level", 1))
+    patience_upgrade = int(config.get_value("progress", "patience_upgrade", 0))
+    total_rounds_played = int(config.get_value("progress", "total_rounds_played", 0))
+    last_daily_reward = str(config.get_value("progress", "last_daily_reward", ""))
+    chef1_outfit_index = int(config.get_value("settings", "chef1_outfit", 0))
+    chef2_outfit_index = int(config.get_value("settings", "chef2_outfit", 1))
+    selected_language = str(config.get_value("settings", "language", "English"))
+    var saved := config.get_value("progress", "achievements", [])
+    if saved is Array:
+        for item in saved:
+            achievements.append(str(item))
+
+func save_progress() -> void:
+    var config := ConfigFile.new()
+    config.set_value("progress", "coins", coins)
+    config.set_value("progress", "best_score", best_score)
+    config.set_value("progress", "unlocked_level", unlocked_level)
+    config.set_value("progress", "patience_upgrade", patience_upgrade)
+    config.set_value("progress", "total_rounds_played", total_rounds_played)
+    config.set_value("progress", "last_daily_reward", last_daily_reward)
+    config.set_value("progress", "achievements", achievements)
+    config.set_value("settings", "chef1_outfit", chef1_outfit_index)
+    config.set_value("settings", "chef2_outfit", chef2_outfit_index)
+    config.set_value("settings", "language", selected_language)
+    config.save(SAVE_PATH)
