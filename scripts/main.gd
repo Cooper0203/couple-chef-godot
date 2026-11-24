@@ -148,7 +148,7 @@ func draw_chef(pos: Vector2, skin: Color, clothes: Color) -> void:
 
 func clear_screen() -> void:
     for child in get_children():
-        if child != game_timer:
+        if child != game_timer and child != cooking_timer:
             remove_child(child)
             child.queue_free()
 
