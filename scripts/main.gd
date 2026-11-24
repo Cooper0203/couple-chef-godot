@@ -613,7 +613,7 @@ func finish_game() -> void:
         best_score = score
 
     if game_mode == "Career" and customers_served >= 5:
-        unlocked_level = maxi(unlocked_level, level + 1)
+            unlocked_level = mini(30, maxi(unlocked_level, level + 1))
 
     save_progress()
 
@@ -657,11 +657,12 @@ func show_results() -> void:
 
     var message := "Great work, Chef!"
 
-    if game_mode == "Career" and customers_served >= 5:
+    if game_mode == "Career" and customers_served >= 5 and level < 30:
         message = "Amazing! Level " + str(level + 1) + " unlocked!"
+    elif game_mode == "Career" and customers_served >= 5 and level == 30:
+        message = "Congratulations! You completed all 30 Career Levels!"
     elif game_mode == "Career":
         message = "Serve 5 customers to unlock the next level!"
-
     var message_label := make_label(message, 21, GREEN)
     message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     layout.add_child(message_label)
