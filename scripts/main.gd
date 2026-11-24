@@ -432,7 +432,7 @@ func refresh_ui() -> void:
         status_label.text = status_text
 
 
-func func _on_cooking_tick() -> void:
+func _on_cooking_tick() -> void:
     if not cooking_active:
         cooking_timer.stop()
         return
