@@ -1,5 +1,5 @@
 extends Control
-# Couple Chef - consolidated Godot 4 main.gd
+# Couple Chef - consolidated Godot 4 main.gd (fixed startup build)
 # Replace the entire contents of scripts/main.gd with this file.
 
 const SAVE_PATH := "user://couple_chef.cfg"
@@ -95,21 +95,21 @@ func _ready() -> void:
     show_menu()
 
 func _draw() -> void:
-    var size := get_viewport_rect().size
-    draw_rect(Rect2(Vector2.ZERO, size), BG)
+    var view: Vector2 = get_viewport_rect().size
+    draw_rect(Rect2(Vector2.ZERO, view), BG)
     if screen == "kitchen":
-        draw_rect(Rect2(0, size.y * 0.48, size.x, size.y * 0.52), Color("#d9a66b"))
-        draw_rect(Rect2(size.x * 0.12, size.y * 0.48, size.x * 0.76, size.y * 0.20), Color("#87583e"))
+        draw_rect(Rect2(0, view.y * 0.48, view.x, view.y * 0.52), Color("#d9a66b"))
+        draw_rect(Rect2(view.x * 0.12, view.y * 0.48, view.x * 0.76, view.y * 0.20), Color("#87583e"))
         for i in range(3):
-            var x := size.x * (0.25 + 0.25 * i)
-            draw_rect(Rect2(x - 55, size.y * 0.35, 110, 100), Color("#f6e6c9"))
-            draw_circle(Vector2(x, size.y * 0.40), 23, Color("#d7e3e5"))
-        draw_chef(Vector2(size.x * 0.40, size.y * 0.75), OUTFIT_COLORS[chef1_outfit_index])
-        draw_chef(Vector2(size.x * 0.60, size.y * 0.75), OUTFIT_COLORS[chef2_outfit_index])
+            var x: float = view.x * (0.25 + 0.25 * float(i))
+            draw_rect(Rect2(x - 55, view.y * 0.35, 110, 100), Color("#f6e6c9"))
+            draw_circle(Vector2(x, view.y * 0.40), 23, Color("#d7e3e5"))
+        draw_chef(Vector2(view.x * 0.40, view.y * 0.75), OUTFIT_COLORS[chef1_outfit_index])
+        draw_chef(Vector2(view.x * 0.60, view.y * 0.75), OUTFIT_COLORS[chef2_outfit_index])
     else:
-        draw_rect(Rect2(0, size.y * 0.62, size.x, size.y * 0.38), Color("#d9a66b"))
-        for x in range(0, int(size.x), 100):
-            draw_line(Vector2(x, size.y * 0.62), Vector2(x, size.y), Color("#b77e4e"), 2)
+        draw_rect(Rect2(0, view.y * 0.62, view.x, view.y * 0.38), Color("#d9a66b"))
+        for x in range(0, int(view.x), 100):
+            draw_line(Vector2(x, view.y * 0.62), Vector2(x, view.y), Color("#b77e4e"), 2)
 
 func draw_chef(pos: Vector2, clothes: Color) -> void:
     draw_circle(pos + Vector2(0, 24), 28, clothes)
@@ -129,8 +129,8 @@ func make_margin() -> MarginContainer:
     var margin := MarginContainer.new()
     margin.add_theme_constant_override("margin_left", 22)
     margin.add_theme_constant_override("margin_right", 22)
-    margin.add_theme_constant_override("margin_top", 18)
-    margin.add_theme_constant_override("margin_bottom", 18)
+    margin.add_theme_constant_override("margin_top", 14)
+    margin.add_theme_constant_override("margin_bottom", 14)
     margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     return margin
 
@@ -146,7 +146,7 @@ func make_label(value: String, font_size: int = 20, color: Color = CREAM) -> Lab
 func make_button(value: String, callback: Callable, color: Color = ORANGE) -> Button:
     var button := Button.new()
     button.text = value
-    button.custom_minimum_size = Vector2(0, 52)
+    button.custom_minimum_size = Vector2(0, 48)
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.add_theme_font_size_override("font_size", 18)
     var normal := StyleBoxFlat.new()
@@ -158,9 +158,12 @@ func make_button(value: String, callback: Callable, color: Color = ORANGE) -> Bu
     normal.content_margin_left = 10
     normal.content_margin_right = 10
     button.add_theme_stylebox_override("normal", normal)
-    var hover := normal.duplicate()
+    var hover: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
     hover.bg_color = color.lightened(0.12)
     button.add_theme_stylebox_override("hover", hover)
+    var pressed: StyleBoxFlat = normal.duplicate() as StyleBoxFlat
+    pressed.bg_color = color.darkened(0.15)
+    button.add_theme_stylebox_override("pressed", pressed)
     button.pressed.connect(callback)
     return button
 
@@ -177,7 +180,7 @@ func make_layout(title_text: String, title_size: int = 32) -> VBoxContainer:
     layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     layout.size_flags_vertical = Control.SIZE_EXPAND_FILL
     layout.alignment = BoxContainer.ALIGNMENT_CENTER
-    layout.add_theme_constant_override("separation", 10)
+    layout.add_theme_constant_override("separation", 8)
     margin.add_child(layout)
     var title := make_label(title_text, title_size)
     layout.add_child(title)
@@ -225,12 +228,13 @@ func show_levels(restaurant_name: String, first_level: int, last_level: int) -> 
     var layout := make_layout(restaurant_name.to_upper())
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     layout.add_child(scroll)
     var list := VBoxContainer.new()
     list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(list)
     for n in range(first_level, last_level + 1):
-        var selected := n
+        var selected: int = n
         var b := make_button("LEVEL %d%s" % [selected, " - LOCKED" if selected > unlocked_level else " - PLAY"], func(): start_career_level(selected))
         b.disabled = selected > unlocked_level
         list.add_child(b)
@@ -270,7 +274,7 @@ func show_shop() -> void:
     var layout := make_layout("UPGRADES SHOP")
     layout.add_child(make_label("Coins: %d" % coins, 18, GREEN))
     layout.add_child(make_label("Customer patience upgrade: level %d" % patience_upgrade, 16))
-    var cost := 50 + patience_upgrade * 50
+    var cost: int = 50 + patience_upgrade * 50
     var buy := make_button("BUY +2 SECONDS PATIENCE - %d COINS" % cost, func():
         if coins >= cost:
             coins -= cost
@@ -289,12 +293,13 @@ func show_achievements() -> void:
     var layout := make_layout("ACHIEVEMENTS")
     var names := ["First Service", "Combo Master", "Five-Star Chef", "Career Expert", "Dedicated Chef"]
     for achievement in names:
-        var mark := "✓ " if achievements.has(achievement) else "○ "
-        layout.add_child(make_label(mark + achievement, 18, GREEN if achievements.has(achievement) else CREAM))
+        var done: bool = achievements.has(achievement)
+        var mark: String = "✓ " if done else "○ "
+        layout.add_child(make_label(mark + achievement, 18, GREEN if done else CREAM))
     add_button(layout, "BACK", show_menu, PANEL)
 
 func claim_daily_reward() -> void:
-    var today := Time.get_date_string_from_system()
+    var today: String = Time.get_date_string_from_system()
     if last_daily_reward == today:
         status_text = "Daily reward already claimed today."
     else:
@@ -304,10 +309,18 @@ func claim_daily_reward() -> void:
         save_progress()
     show_menu()
 
+func local_ip() -> String:
+    for a in IP.get_local_addresses():
+        var addr: String = str(a)
+        if addr.begins_with("192.168.") or addr.begins_with("10.") or addr.begins_with("172."):
+            return addr
+    return "unknown"
+
 func show_multiplayer() -> void:
     screen = "multiplayer"
     var layout := make_layout("ONLINE / LAN CO-OP")
-    layout.add_child(make_label("Both players must use the same Wi-Fi network.", 15))
+    layout.add_child(make_label("Both players must use the same Wi-Fi network or hotspot.", 15))
+    layout.add_child(make_label("Your IP: " + local_ip(), 16, ORANGE))
     ip_input = LineEdit.new()
     ip_input.placeholder_text = "Host IP address (example: 192.168.1.10)"
     ip_input.text = host_ip
@@ -317,7 +330,7 @@ func show_multiplayer() -> void:
     add_button(layout, "HOST GAME", host_lan_game, GREEN)
     add_button(layout, "JOIN GAME", join_lan_game, Color("#559bb9"))
     add_button(layout, "START CO-OP MATCH (HOST)", start_host_match, ORANGE)
-    add_button(layout, "DISCONNECT", disconnect_network, RED)
+    add_button(layout, "DISCONNECT", func(): disconnect_network(); update_lobby("Not connected"), RED)
     add_button(layout, "BACK", show_menu, PANEL)
 
 func update_lobby(message: String) -> void:
@@ -328,14 +341,14 @@ func update_lobby(message: String) -> void:
 func host_lan_game() -> void:
     disconnect_network()
     var peer := ENetMultiplayerPeer.new()
-    var result := peer.create_server(PORT, MAX_CLIENTS)
+    var result: int = peer.create_server(PORT, MAX_CLIENTS)
     if result != OK:
         update_lobby("Could not host. Error: %s" % error_string(result))
         return
     multiplayer.multiplayer_peer = peer
     is_network_game = true
     is_host = true
-    update_lobby("Hosting. Give your partner your local IP address and wait for them to join.")
+    update_lobby("Hosting at %s - tell your partner this IP and wait for them to join." % local_ip())
 
 func join_lan_game() -> void:
     host_ip = ip_input.text.strip_edges() if is_instance_valid(ip_input) else host_ip
@@ -344,7 +357,7 @@ func join_lan_game() -> void:
         return
     disconnect_network()
     var peer := ENetMultiplayerPeer.new()
-    var result := peer.create_client(host_ip, PORT)
+    var result: int = peer.create_client(host_ip, PORT)
     if result != OK:
         update_lobby("Could not connect: %s" % error_string(result))
         return
@@ -370,11 +383,11 @@ func disconnect_network() -> void:
     is_host = false
     network_status = "Not connected"
 
-func _on_peer_connected(peer_id: int) -> void:
+func _on_peer_connected(_peer_id: int) -> void:
     if is_host:
         update_lobby("Player connected. Host can start the match.")
 
-func _on_peer_disconnected(peer_id: int) -> void:
+func _on_peer_disconnected(_peer_id: int) -> void:
     update_lobby("Other player disconnected.")
 
 func _on_connected_to_server() -> void:
@@ -392,7 +405,7 @@ func _on_server_disconnected() -> void:
         update_lobby("Host disconnected.")
 
 func generate_customer_order() -> void:
-    var choice := randi_range(0, 2)
+    var choice: int = randi_range(0, 2)
     if choice == 0:
         current_order_name = "Classic Burger"
         current_ingredients_required = 3
@@ -760,7 +773,7 @@ func load_progress() -> void:
     chef1_outfit_index = int(config.get_value("settings", "chef1_outfit", 0))
     chef2_outfit_index = int(config.get_value("settings", "chef2_outfit", 1))
     selected_language = str(config.get_value("settings", "language", "English"))
-    var saved := config.get_value("progress", "achievements", [])
+    var saved: Variant = config.get_value("progress", "achievements", [])
     if saved is Array:
         for item in saved:
             achievements.append(str(item))
